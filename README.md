@@ -21,5 +21,6 @@ The game runtime is procedural again and does not depend on generated concept ba
 
 - `assets/environment/`: sand floor and coral wall texture sources
 - `assets/characters/`: player character cutout and chroma-key source
-- `assets/monsters/`: beach enemy cutouts and chroma-key sources
+- `assets/enemies/`: 80s anime enemy animation sprites, separated by enemy and action
+- `assets/effects/`: screen-space effect animation sprites
 - `assets/objects/`: pickup sprite sheet cutout and chroma-key source

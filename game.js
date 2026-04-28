@@ -46,16 +46,36 @@ const OBJECT_ASSETS = {
   pearlCache: loadImage("assets/objects/pearl_cache_pickup_80s_anime.png"),
 };
 
-const MONSTER_ASSETS = {
-  crabGuard: loadImage("assets/monsters/coral_crab_guard_80s_anime.png"),
-  waterPistolEnemy: loadImage("assets/monsters/water_pistol_bikini_enemy_80s_anime.png"),
-};
+const ENEMY_TYPES = [
+  { id: "swordswoman", name: "Swordswoman", range: 1 },
+  { id: "shooter", name: "Shooter", range: 3, minRange: 2 },
+  { id: "fighter", name: "Fighter", range: 1 },
+];
+
+const ENEMY_ASSETS = Object.fromEntries(
+  ENEMY_TYPES.map((type) => [
+    type.id,
+    {
+      standby: loadEnemyFrames(type.id, "standby"),
+      attack: loadEnemyFrames(type.id, "attack"),
+      death: loadEnemyFrames(type.id, "death"),
+    },
+  ]),
+);
 
 const ATTACK_ASSETS = {
   waterPistolSplash: [
     loadImage("assets/attacks/water_pistol_splash_01.png"),
     loadImage("assets/attacks/water_pistol_splash_02.png"),
     loadImage("assets/attacks/water_pistol_splash_03.png"),
+  ],
+};
+
+const EFFECT_ASSETS = {
+  potionBubbles: [
+    loadImage("assets/effects/potion/potion_bubbles_01.png"),
+    loadImage("assets/effects/potion/potion_bubbles_02.png"),
+    loadImage("assets/effects/potion/potion_bubbles_03.png"),
   ],
 };
 
@@ -68,11 +88,16 @@ let lastFrame = performance.now();
 let frames = 0;
 let fps = 0;
 let attackAnimation = null;
+let potionAnimation = null;
 
 function loadImage(src) {
   const image = new Image();
   image.src = src;
   return image;
+}
+
+function loadEnemyFrames(enemy, action) {
+  return [1, 2, 3].map((frame) => loadImage(`assets/enemies/${enemy}/${enemy}_${action}_${String(frame).padStart(2, "0")}.png`));
 }
 
 function mulberry32(seed) {
@@ -128,7 +153,7 @@ function buildFloor(run) {
   const far = [...open].sort((a, b) => b.dist - a.dist)[0];
   run.player.x = 1;
   run.player.y = 1;
-  run.player.dir = 1;
+  run.player.dir = startDirection(run);
   run.stairs = { x: far.x, y: far.y };
   run.monsters = [];
   run.items = [];
@@ -141,13 +166,17 @@ function buildFloor(run) {
     .forEach((cell, index) => {
       run.monsters.push({
         id: `m${run.floor}-${index}`,
+        type: ENEMY_TYPES[index % ENEMY_TYPES.length].id,
         x: cell.x,
         y: cell.y,
-        name: index % 3 === 0 ? "Crab guard" : index % 3 === 1 ? "Kelp shade" : "Glass gull",
+        name: ENEMY_TYPES[index % ENEMY_TYPES.length].name,
         hp: 7 + run.floor * 3,
         maxHp: 7 + run.floor * 3,
-        attack: 2 + Math.floor(run.floor / 2),
+        attack: 3 + Math.floor(run.floor / 2),
         xp: 5 + run.floor * 2,
+        state: "standby",
+        attackStartedAt: 0,
+        diedAt: 0,
       });
     });
 
@@ -160,7 +189,7 @@ function buildFloor(run) {
     });
 
   run.lastMessage = `Floor ${run.floor}: ${theme(run).name}`;
-  logEvent(run, `Generated ${width}x${height} floor with ${run.monsters.length} monsters.`);
+  logEvent(run, `Generated ${width}x${height} floor with ${run.monsters.length} enemies.`);
 }
 
 function carveMaze(run, x, y) {
@@ -216,6 +245,13 @@ function theme(run) {
   return THEMES[(run.floor - 1) % THEMES.length];
 }
 
+function startDirection(run) {
+  return Math.max(
+    0,
+    DIRS.findIndex((dir) => !isWall(run, run.player.x + dir.x, run.player.y + dir.y)),
+  );
+}
+
 function act(action) {
   if (!game.player.alive) {
     logEvent(game, "Start a new run to continue.");
@@ -256,26 +292,29 @@ function spendTurn(message) {
   game.turn += 1;
   game.lastMessage = message;
   logEvent(game, message);
+  resolveRangedEnemyAttacks();
   updateUi();
 }
 
 function attackMonster(monster) {
+  if (monster.state === "dying") return;
   const hit = game.player.attack + Math.floor(game.random() * 4);
   monster.hp -= hit;
   game.turn += 1;
   startWaterPistolAttack();
   if (monster.hp <= 0) {
-    game.monsters = game.monsters.filter((enemy) => enemy.id !== monster.id);
-    game.player.x = monster.x;
-    game.player.y = monster.y;
+    monster.hp = 0;
+    monster.state = "dying";
+    monster.diedAt = performance.now();
     gainXp(monster.xp);
     const message = `Defeated ${monster.name} for ${monster.xp} XP.`;
     game.lastMessage = message;
     logEvent(game, message);
   } else {
     const counter = monster.attack + Math.floor(game.random() * 3);
+    startEnemyAttack(monster);
     game.player.hp = Math.max(0, game.player.hp - counter);
-    const message = `Hit ${monster.name} for ${hit}. It bites back for ${counter}.`;
+    const message = `Hit ${monster.name} for ${hit}. ${monster.name} strikes back for ${counter}.`;
     game.lastMessage = message;
     logEvent(game, message);
     if (game.player.hp <= 0) {
@@ -287,10 +326,54 @@ function attackMonster(monster) {
   updateUi();
 }
 
+function resolveRangedEnemyAttacks() {
+  if (!game.player.alive) return;
+  const shooters = game.monsters.filter((monster) => monster.type === "shooter" && monster.state !== "dying");
+  const shooter = shooters.find((monster) => canShooterAttack(monster));
+  if (!shooter) return;
+
+  const damage = shooter.attack + Math.floor(game.random() * 3);
+  startEnemyAttack(shooter);
+  game.player.hp = Math.max(0, game.player.hp - damage);
+  logEvent(game, `${shooter.name} sprays you from range for ${damage}.`);
+  if (game.player.hp <= 0) {
+    game.player.alive = false;
+    game.lastMessage = "You collapse in the tide-warmed sand.";
+    logEvent(game, "Run ended.");
+  }
+}
+
+function canShooterAttack(monster) {
+  const dx = game.player.x - monster.x;
+  const dy = game.player.y - monster.y;
+  const distance = Math.abs(dx) + Math.abs(dy);
+  if (distance < 2 || distance > 3) return false;
+  if (dx !== 0 && dy !== 0) return false;
+
+  const stepX = Math.sign(dx);
+  const stepY = Math.sign(dy);
+  for (let i = 1; i < distance; i += 1) {
+    if (isWall(game, monster.x + stepX * i, monster.y + stepY * i)) return false;
+  }
+  return true;
+}
+
+function startEnemyAttack(monster) {
+  monster.state = "attack";
+  monster.attackStartedAt = performance.now();
+}
+
 function startWaterPistolAttack() {
   attackAnimation = {
     startedAt: performance.now(),
     duration: 360,
+  };
+}
+
+function startPotionAnimation() {
+  potionAnimation = {
+    startedAt: performance.now(),
+    duration: 720,
   };
 }
 
@@ -335,6 +418,7 @@ function usePotion() {
   }
   game.player.inventory.splice(index, 1);
   game.player.hp = Math.min(game.player.maxHp, game.player.hp + 12);
+  startPotionAnimation();
   spendTurn("Coconut potion restored 12 HP.");
 }
 
@@ -343,6 +427,10 @@ function isWall(run, x, y) {
 }
 
 function monsterAt(run, x, y) {
+  return run.monsters.find((monster) => monster.state !== "dying" && monster.x === x && monster.y === y);
+}
+
+function visibleMonsterAt(run, x, y) {
   return run.monsters.find((monster) => monster.x === x && monster.y === y);
 }
 
@@ -372,7 +460,8 @@ function updateUi() {
   ui.facingText.textContent = DIRS[player.dir].name;
   ui.seedText.textContent = game.seed;
   ui.positionText.textContent = `${player.x}, ${player.y}`;
-  ui.entityText.textContent = `${game.monsters.length} monsters / ${game.items.length} pickups`;
+  const activeEnemies = game.monsters.filter((monster) => monster.state !== "dying").length;
+  ui.entityText.textContent = `${activeEnemies} enemies / ${game.items.length} pickups`;
   ui.fpsText.textContent = fps.toString();
   ui.inventoryList.innerHTML = player.inventory.length
     ? player.inventory.map((item) => `<li>${item}</li>`).join("")
@@ -381,6 +470,7 @@ function updateUi() {
 }
 
 function render(now) {
+  cleanupDyingEnemies(now);
   resizeCanvas();
   drawScene();
   drawMinimap();
@@ -448,7 +538,12 @@ function drawScene() {
   drawForwardEntity();
   drawAttackAnimation();
   drawHeldWeapon();
+  drawPotionAnimation();
   drawCrosshair();
+}
+
+function cleanupDyingEnemies(now) {
+  game.monsters = game.monsters.filter((monster) => monster.state !== "dying" || now - monster.diedAt < 2600);
 }
 
 function weaponLayout() {
@@ -499,6 +594,31 @@ function drawHeldWeapon() {
 
   const { x, y, size } = weaponLayout();
   ctx.save();
+  ctx.drawImage(image, x, y, size, size);
+  ctx.restore();
+}
+
+function drawPotionAnimation() {
+  if (!potionAnimation) return;
+  const elapsed = performance.now() - potionAnimation.startedAt;
+  const progress = elapsed / potionAnimation.duration;
+  if (progress >= 1) {
+    potionAnimation = null;
+    return;
+  }
+
+  const frames = EFFECT_ASSETS.potionBubbles;
+  const frameIndex = Math.min(frames.length - 1, Math.floor(progress * frames.length));
+  const image = frames[frameIndex];
+  if (!image.complete || image.naturalWidth <= 0) return;
+
+  const pulse = Math.sin(progress * Math.PI);
+  const size = Math.min(canvas.width * 1.16, canvas.height * (0.93 + pulse * 0.12));
+  const x = canvas.width / 2 - size / 2;
+  const y = canvas.height * (0.7 - progress * 0.06) - size / 2;
+
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, 1.18 - progress * 0.42);
   ctx.drawImage(image, x, y, size, size);
   ctx.restore();
 }
@@ -601,20 +721,29 @@ function drawForwardEntity() {
   const ahead = cellsAhead(6);
   for (let depth = 0; depth < ahead.length; depth += 1) {
     const cell = ahead[depth];
-    const monster = monsterAt(game, cell.x, cell.y);
+    const monster = visibleMonsterAt(game, cell.x, cell.y);
     const item = itemAt(game, cell.x, cell.y);
     const stairs = game.stairs.x === cell.x && game.stairs.y === cell.y;
     if (!monster && !item && !stairs) continue;
 
-    const scale = 1 / (depth + 1);
-    const cx = canvas.width / 2;
-    const cy = canvas.height * (0.58 + depth * 0.015);
-    const size = canvas.height * 0.52 * scale;
-    if (monster) drawMonster(cx, cy, size, monster);
-    if (item) drawPickup(cx, cy, size * 0.42, item.type);
-    if (stairs) drawStairs(cx, cy, size * 0.6);
+    const { x, groundY, size } = entityLayout(depth);
+    if (monster) drawMonster(x, groundY, size, monster);
+    if (item) drawPickup(x, groundY - size * 0.18, size * 0.42, item.type);
+    if (stairs) drawStairs(x, groundY - size * 0.12, size * 0.6);
     break;
   }
+}
+
+function entityLayout(depth) {
+  const distance = Math.min(depth / 5, 1);
+  const perspective = 1 / (1 + depth * 0.58);
+  const groundNear = canvas.height * 0.88;
+  const groundFar = canvas.height * 0.54;
+  return {
+    x: canvas.width / 2,
+    groundY: groundNear + (groundFar - groundNear) * Math.pow(distance, 0.75),
+    size: Math.max(canvas.height * 0.18, canvas.height * 0.5 * perspective),
+  };
 }
 
 function cellsAhead(max) {
@@ -630,36 +759,56 @@ function cellsAhead(max) {
 }
 
 function drawMonster(x, y, size, monster) {
-  const image = monster.name === "Crab guard" ? MONSTER_ASSETS.crabGuard : MONSTER_ASSETS.waterPistolEnemy;
-  if (image.complete && image.naturalWidth > 0) {
-    const drawSize = size * 1.5;
-    ctx.save();
-    ctx.drawImage(image, x - drawSize / 2, y - drawSize * 0.62, drawSize, drawSize);
-    drawMonsterHealthBar(x, y, size, monster);
-    ctx.restore();
-    return;
+  const { action, frameIndex } = enemyAnimationFrame(monster);
+  const image = ENEMY_ASSETS[monster.type]?.[action]?.[frameIndex];
+  if (image?.complete && image.naturalWidth > 0) {
+    drawEnemySprite(x, y, size, image, action);
+    if (monster.state !== "dying") drawMonsterHealthBar(x, y, size, monster);
   }
+}
 
+function enemyAnimationFrame(monster) {
+  const now = performance.now();
+  if (monster.state === "dying") {
+    const frameIndex = Math.min(2, Math.floor((now - monster.diedAt) / 320));
+    return { action: "death", frameIndex };
+  }
+  if (monster.state === "attack") {
+    const elapsed = now - monster.attackStartedAt;
+    if (elapsed < 540) return { action: "attack", frameIndex: Math.min(2, Math.floor(elapsed / 180)) };
+    monster.state = "standby";
+  }
+  return { action: "standby", frameIndex: Math.floor(now / 220) % 3 };
+}
+
+function drawEnemySprite(x, y, size, image, action) {
+  const scale =
+    action === "death"
+      ? Math.min((size * 0.62) / image.naturalHeight, (size * 1.42) / image.naturalWidth)
+      : (size * 1.32) / image.naturalHeight;
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  const top = y - drawHeight;
   ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = "#e76f51";
-  ctx.beginPath();
-  ctx.ellipse(0, 0, size * 0.38, size * 0.24, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#fff6dc";
-  ctx.beginPath();
-  ctx.arc(-size * 0.13, -size * 0.1, size * 0.045, 0, Math.PI * 2);
-  ctx.arc(size * 0.13, -size * 0.1, size * 0.045, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.drawImage(image, x - drawWidth / 2, top, drawWidth, drawHeight);
   ctx.restore();
-  drawMonsterHealthBar(x, y, size, monster);
 }
 
 function drawMonsterHealthBar(x, y, size, monster) {
+  const width = size * 0.72;
+  const height = Math.max(6, size * 0.04);
+  const filledWidth = width * (monster.hp / monster.maxHp);
+  const left = x - width / 2;
+  const top = y + size * 0.06;
+
   ctx.save();
-  ctx.strokeStyle = "#f7d987";
-  ctx.lineWidth = Math.max(2, size * 0.025);
-  ctx.strokeRect(x - size * 0.32, y + size * 0.28, size * 0.64 * (monster.hp / monster.maxHp), 5);
+  ctx.fillStyle = "rgba(16,32,38,0.72)";
+  ctx.fillRect(left, top, width, height);
+  ctx.fillStyle = "#d93434";
+  ctx.fillRect(left, top, filledWidth, height);
+  ctx.strokeStyle = "#fff6dc";
+  ctx.lineWidth = Math.max(2, size * 0.02);
+  ctx.strokeRect(left, top, width, height);
   ctx.restore();
 }
 
@@ -731,7 +880,9 @@ function drawMinimap() {
     }
   }
   ctx.fillStyle = "#e76f51";
-  game.monsters.forEach((m) => ctx.fillRect(pad + m.x * scale, pad + m.y * scale, scale, scale));
+  game.monsters
+    .filter((monster) => monster.state !== "dying")
+    .forEach((m) => ctx.fillRect(pad + m.x * scale, pad + m.y * scale, scale, scale));
   ctx.fillStyle = "#2a9d8f";
   game.items.forEach((item) => ctx.fillRect(pad + item.x * scale, pad + item.y * scale, scale, scale));
   ctx.fillStyle = "#fff6dc";
