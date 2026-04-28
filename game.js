@@ -35,10 +35,21 @@ const THEMES = [
   { name: "Shellgate Reef", wall: "#e3c17b", floor: "#c98d58", accent: "#5fb3a8" },
 ];
 
+const ENVIRONMENT_ASSETS = {
+  floor: loadImage("assets/environment/sand_floor_tile_80s_anime.png"),
+  wall: loadImage("assets/environment/coral_wall_tile_80s_anime.png"),
+};
+
 let game;
 let lastFrame = performance.now();
 let frames = 0;
 let fps = 0;
+
+function loadImage(src) {
+  const image = new Image();
+  image.src = src;
+  return image;
+}
 
 function mulberry32(seed) {
   return function random() {
@@ -364,7 +375,6 @@ function resizeCanvas() {
 
 function drawScene() {
   const t = theme(game);
-  const themeIndex = (game.floor - 1) % THEMES.length;
   const width = canvas.width;
   const height = canvas.height;
   const sky = ctx.createLinearGradient(0, 0, 0, height * 0.5);
@@ -377,7 +387,7 @@ function drawScene() {
   floor.addColorStop(1, "#7a5630");
   ctx.fillStyle = floor;
   ctx.fillRect(0, height * 0.5, width, height * 0.5);
-  drawFloorTexture(themeIndex, width, height);
+  drawFloorTexture(width, height);
 
   const rays = 180;
   const fov = Math.PI / 3;
@@ -392,7 +402,7 @@ function drawScene() {
     const sliceWidth = Math.ceil(width / rays) + 1;
     ctx.fillStyle = shadeColor(t.wall, shade);
     ctx.fillRect(x, height / 2 - wallHeight / 2, sliceWidth, wallHeight);
-    drawWallTexture(i, x, height / 2 - wallHeight / 2, sliceWidth, wallHeight, shade, themeIndex);
+    drawWallTexture(ray, x, height / 2 - wallHeight / 2, sliceWidth, wallHeight, shade);
     if (ray.side === "x") {
       ctx.fillStyle = `rgba(16,32,38,${0.18 + (1 - shade) * 0.35})`;
       ctx.fillRect(x, height / 2 - wallHeight / 2, sliceWidth, wallHeight);
@@ -407,31 +417,75 @@ function drawScene() {
   drawCrosshair();
 }
 
-function drawFloorTexture(themeIndex, width, height) {
+function drawFloorTexture(width, height) {
+  const image = ENVIRONMENT_ASSETS.floor;
   ctx.save();
-  ctx.globalAlpha = 0.16;
-  ctx.strokeStyle = themeIndex % 2 === 0 ? "#fff6dc" : "#49b7c4";
-  ctx.lineWidth = 1;
-  for (let y = height * 0.56; y < height; y += 18) {
-    const drift = Math.sin(y * 0.035 + game.turn * 0.03) * 12;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    for (let x = 0; x <= width; x += 36) {
-      ctx.lineTo(x, y + Math.sin(x * 0.025 + y * 0.04) * 4 + drift);
+  ctx.beginPath();
+  ctx.rect(0, height * 0.5, width, height * 0.5);
+  ctx.clip();
+
+  if (image.complete && image.naturalWidth > 0) {
+    const horizon = height * 0.5;
+    const rows = 64;
+    for (let i = 0; i < rows; i += 1) {
+      const topRatio = i / rows;
+      const bottomRatio = (i + 1) / rows;
+      const y1 = horizon + Math.pow(topRatio, 1.65) * (height - horizon);
+      const y2 = horizon + Math.pow(bottomRatio, 1.65) * (height - horizon);
+      const rowHeight = Math.max(1, y2 - y1 + 1);
+      const perspective = Math.pow(bottomRatio, 1.2);
+      const sourceHeight = Math.max(1, Math.floor(image.naturalHeight * (0.012 + perspective * 0.028)));
+      const sourceWidth = Math.min(image.naturalWidth, Math.floor(image.naturalWidth * (0.34 + perspective * 0.66)));
+      const sourceX = Math.floor((game.player.x * 53 + i * 7) % Math.max(1, image.naturalWidth - sourceWidth + 1));
+      const sourceY = Math.floor(
+        (game.player.y * 37 + i * 18 + game.turn * 0.35) % Math.max(1, image.naturalHeight - sourceHeight + 1),
+      );
+      const drawWidth = width * (0.55 + perspective * 1.55);
+      const drawX = width / 2 - drawWidth / 2;
+
+      ctx.globalAlpha = 0.32 + perspective * 0.48;
+      ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, drawX, y1, drawWidth, rowHeight);
     }
-    ctx.stroke();
+    ctx.globalAlpha = 0.24;
+    ctx.fillStyle = "#f7d987";
+    ctx.fillRect(0, horizon, width, height - horizon);
+  } else {
+    ctx.globalAlpha = 0.16;
+    ctx.strokeStyle = "#fff6dc";
+    ctx.lineWidth = 1;
+    for (let y = height * 0.56; y < height; y += 18) {
+      const drift = Math.sin(y * 0.035 + game.turn * 0.03) * 12;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      for (let x = 0; x <= width; x += 36) {
+        ctx.lineTo(x, y + Math.sin(x * 0.025 + y * 0.04) * 4 + drift);
+      }
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
 
-function drawWallTexture(rayIndex, x, y, width, height, shade, themeIndex) {
+function drawWallTexture(ray, x, y, width, height, shade) {
   if (height <= 0) return;
+  const image = ENVIRONMENT_ASSETS.wall;
   ctx.save();
-  ctx.globalAlpha = 0.12 + shade * 0.14;
-  ctx.fillStyle = themeIndex % 2 === 0 ? "#fff6dc" : "#102026";
-  const offset = (rayIndex % 11) * 0.12;
-  for (let band = y + offset * height; band < y + height; band += Math.max(10, height * 0.12)) {
-    ctx.fillRect(x, band, width, Math.max(1, height * 0.015));
+  if (image.complete && image.naturalWidth > 0) {
+    const hitOffset = ray.side === "x" ? ray.hitY : ray.hitX;
+    const texturePosition = ((hitOffset % 1) + 1) % 1;
+    const textureX = Math.min(image.naturalWidth - 1, Math.floor(texturePosition * image.naturalWidth));
+    ctx.globalAlpha = 0.36 + shade * 0.48;
+    ctx.drawImage(image, textureX, 0, 1, image.naturalHeight, x, y, width, height);
+    ctx.globalAlpha = Math.max(0.08, 0.48 - shade * 0.24);
+    ctx.fillStyle = "#102026";
+    ctx.fillRect(x, y, width, height);
+  } else {
+    ctx.globalAlpha = 0.12 + shade * 0.14;
+    ctx.fillStyle = "#fff6dc";
+    const offset = (Math.floor(x) % 11) * 0.12;
+    for (let band = y + offset * height; band < y + height; band += Math.max(10, height * 0.12)) {
+      ctx.fillRect(x, band, width, Math.max(1, height * 0.015));
+    }
   }
   ctx.restore();
 }
@@ -449,11 +503,12 @@ function castRay(angle) {
     const y = Math.floor(py + dy * distance);
     if (isWall(game, x, y)) {
       const hitX = px + dx * distance;
+      const hitY = py + dy * distance;
       side = Math.abs(hitX - Math.round(hitX)) < 0.08 ? "x" : "y";
-      return { distance, side };
+      return { distance, side, hitX, hitY };
     }
   }
-  return { distance: 16, side };
+  return { distance: 16, side, hitX: px + dx * 16, hitY: py + dy * 16 };
 }
 
 function drawForwardEntity() {
