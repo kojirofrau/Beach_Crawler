@@ -430,10 +430,6 @@ function monsterAt(run, x, y) {
   return run.monsters.find((monster) => monster.state !== "dying" && monster.x === x && monster.y === y);
 }
 
-function visibleMonsterAt(run, x, y) {
-  return run.monsters.find((monster) => monster.x === x && monster.y === y);
-}
-
 function itemAt(run, x, y) {
   return run.items.find((item) => item.x === x && item.y === y);
 }
@@ -470,9 +466,10 @@ function updateUi() {
 }
 
 function render(now) {
+  updateEnemyAnimationStates(now);
   cleanupDyingEnemies(now);
   resizeCanvas();
-  drawScene();
+  drawScene(now);
   drawMinimap();
   frames += 1;
   if (now - lastFrame > 500) {
@@ -495,7 +492,7 @@ function resizeCanvas() {
   }
 }
 
-function drawScene() {
+function drawScene(now) {
   const t = theme(game);
   const width = canvas.width;
   const height = canvas.height;
@@ -535,11 +532,19 @@ function drawScene() {
     }
   }
 
-  drawForwardEntity();
+  drawVisibleEntities(baseAngle, fov, now);
   drawAttackAnimation();
   drawHeldWeapon();
   drawPotionAnimation();
   drawCrosshair();
+}
+
+function updateEnemyAnimationStates(now) {
+  game.monsters.forEach((monster) => {
+    if (monster.state === "attack" && now - monster.attackStartedAt >= 540) {
+      monster.state = "standby";
+    }
+  });
 }
 
 function cleanupDyingEnemies(now) {
@@ -723,49 +728,70 @@ function castRay(angle) {
   return { distance: 16, side, hitX: px + dx * 16, hitY: py + dy * 16 };
 }
 
-function drawForwardEntity() {
-  const ahead = cellsAhead(6);
-  for (let depth = 0; depth < ahead.length; depth += 1) {
-    const cell = ahead[depth];
-    const monster = visibleMonsterAt(game, cell.x, cell.y);
-    const item = itemAt(game, cell.x, cell.y);
-    const stairs = game.stairs.x === cell.x && game.stairs.y === cell.y;
-    if (!monster && !item && !stairs) continue;
-
-    const { x, groundY, size } = entityLayout(depth);
-    if (monster) drawMonster(x, groundY, size, monster);
-    if (item) drawPickup(x, groundY - size * 0.18, size * 0.42, item.type);
-    if (stairs) drawStairs(x, groundY - size * 0.12, size * 0.6);
-    break;
-  }
+function drawVisibleEntities(baseAngle, fov, now) {
+  const entities = collectVisibleEntities(baseAngle, fov);
+  entities
+    .sort((a, b) => b.distance - a.distance)
+    .forEach((entity) => {
+      if (entity.monster) drawMonster(entity.x, entity.groundY, entity.size, entity.monster, now);
+      if (entity.item) drawPickup(entity.x, entity.groundY - entity.size * 0.18, entity.size * 0.42, entity.item.type);
+      if (entity.stairs) drawStairs(entity.x, entity.groundY - entity.size * 0.12, entity.size * 0.6);
+    });
 }
 
-function entityLayout(depth) {
-  const distance = Math.min(depth / 5, 1);
-  const perspective = 1 / (1 + depth * 0.58);
-  const groundNear = canvas.height * 0.88;
-  const groundFar = canvas.height * 0.54;
-  return {
-    x: canvas.width / 2,
-    groundY: groundNear + (groundFar - groundNear) * Math.pow(distance, 0.75),
-    size: Math.max(canvas.height * 0.18, canvas.height * 0.5 * perspective),
-  };
+function collectVisibleEntities(baseAngle, fov) {
+  return entityCells()
+    .map((cell) => projectEntity(cell, baseAngle, fov))
+    .filter(Boolean);
 }
 
-function cellsAhead(max) {
-  const dir = DIRS[game.player.dir];
+function entityCells() {
   const cells = [];
-  for (let i = 1; i <= max; i += 1) {
-    const x = game.player.x + dir.x * i;
-    const y = game.player.y + dir.y * i;
-    if (isWall(game, x, y)) break;
-    cells.push({ x, y });
-  }
+  game.monsters.forEach((monster) => cells.push({ x: monster.x, y: monster.y, monster }));
+  game.items.forEach((item) => cells.push({ x: item.x, y: item.y, item }));
+  cells.push({ x: game.stairs.x, y: game.stairs.y, stairs: true });
   return cells;
 }
 
-function drawMonster(x, y, size, monster) {
-  const { action, frameIndex } = enemyAnimationFrame(monster);
+function projectEntity(cell, baseAngle, fov) {
+  const px = game.player.x + 0.5;
+  const py = game.player.y + 0.5;
+  const cx = cell.x + 0.5;
+  const cy = cell.y + 0.5;
+  const dx = cx - px;
+  const dy = cy - py;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 0.1 || distance > 6.4) return null;
+
+  const angle = Math.atan2(dy, dx);
+  const relativeAngle = normalizeAngle(angle - baseAngle);
+  if (Math.abs(relativeAngle) > fov * 0.58) return null;
+
+  const ray = castRay(angle);
+  if (ray.distance < distance - 0.18) return null;
+
+  const forwardDistance = Math.max(0.45, distance * Math.cos(relativeAngle));
+  const screenRatio = Math.tan(relativeAngle) / Math.tan(fov / 2);
+  const size = Math.max(canvas.height * 0.13, canvas.height * 0.5 / forwardDistance);
+  const depth = Math.min((forwardDistance - 1) / 5, 1);
+  const groundNear = canvas.height * 0.88;
+  const groundFar = canvas.height * 0.54;
+
+  return {
+    ...cell,
+    distance,
+    x: canvas.width * (0.5 + screenRatio * 0.5),
+    groundY: groundNear + (groundFar - groundNear) * Math.max(0, Math.pow(depth, 0.75)),
+    size,
+  };
+}
+
+function normalizeAngle(angle) {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+function drawMonster(x, y, size, monster, now) {
+  const { action, frameIndex } = enemyAnimationFrame(monster, now);
   const image = ENEMY_ASSETS[monster.type]?.[action]?.[frameIndex];
   if (image?.complete && image.naturalWidth > 0) {
     drawEnemySprite(x, y, size, image, action);
@@ -773,8 +799,7 @@ function drawMonster(x, y, size, monster) {
   }
 }
 
-function enemyAnimationFrame(monster) {
-  const now = performance.now();
+function enemyAnimationFrame(monster, now) {
   if (monster.state === "dying") {
     const frameIndex = Math.min(2, Math.floor((now - monster.diedAt) / 320));
     return { action: "death", frameIndex };
@@ -782,7 +807,6 @@ function enemyAnimationFrame(monster) {
   if (monster.state === "attack") {
     const elapsed = now - monster.attackStartedAt;
     if (elapsed < 540) return { action: "attack", frameIndex: Math.min(2, Math.floor(elapsed / 180)) };
-    monster.state = "standby";
   }
   return { action: "standby", frameIndex: Math.floor(now / 220) % 3 };
 }
