@@ -38,12 +38,36 @@ const THEMES = [
 const ENVIRONMENT_ASSETS = {
   floor: loadImage("assets/environment/sand_floor_tile_80s_anime.png"),
   wall: loadImage("assets/environment/coral_wall_tile_80s_anime.png"),
+  stairs: loadImage("assets/environment/downward_stairs_80s_anime.png"),
+};
+
+const OBJECT_ASSETS = {
+  coconutPotion: loadImage("assets/objects/coconut_potion_pickup_80s_anime.png"),
+  pearlCache: loadImage("assets/objects/pearl_cache_pickup_80s_anime.png"),
+};
+
+const MONSTER_ASSETS = {
+  crabGuard: loadImage("assets/monsters/coral_crab_guard_80s_anime.png"),
+  waterPistolEnemy: loadImage("assets/monsters/water_pistol_bikini_enemy_80s_anime.png"),
+};
+
+const ATTACK_ASSETS = {
+  waterPistolSplash: [
+    loadImage("assets/attacks/water_pistol_splash_01.png"),
+    loadImage("assets/attacks/water_pistol_splash_02.png"),
+    loadImage("assets/attacks/water_pistol_splash_03.png"),
+  ],
+};
+
+const WEAPON_ASSETS = {
+  waterPistol: loadImage("assets/weapons/water_pistol_first_person.png"),
 };
 
 let game;
 let lastFrame = performance.now();
 let frames = 0;
 let fps = 0;
+let attackAnimation = null;
 
 function loadImage(src) {
   const image = new Image();
@@ -239,6 +263,7 @@ function attackMonster(monster) {
   const hit = game.player.attack + Math.floor(game.random() * 4);
   monster.hp -= hit;
   game.turn += 1;
+  startWaterPistolAttack();
   if (monster.hp <= 0) {
     game.monsters = game.monsters.filter((enemy) => enemy.id !== monster.id);
     game.player.x = monster.x;
@@ -260,6 +285,13 @@ function attackMonster(monster) {
     }
   }
   updateUi();
+}
+
+function startWaterPistolAttack() {
+  attackAnimation = {
+    startedAt: performance.now(),
+    duration: 360,
+  };
 }
 
 function gainXp(amount) {
@@ -414,7 +446,61 @@ function drawScene() {
   }
 
   drawForwardEntity();
+  drawAttackAnimation();
+  drawHeldWeapon();
   drawCrosshair();
+}
+
+function weaponLayout() {
+  const size = Math.min(canvas.width * 0.69, canvas.height * 0.78);
+  const x = canvas.width - size * 1.02;
+  const y = canvas.height - size * 0.74;
+  return {
+    size,
+    x,
+    y,
+    muzzleX: x + size * 0.28,
+    muzzleY: y + size * 0.26,
+  };
+}
+
+function drawAttackAnimation() {
+  if (!attackAnimation) return;
+  const elapsed = performance.now() - attackAnimation.startedAt;
+  const progress = elapsed / attackAnimation.duration;
+  if (progress >= 1) {
+    attackAnimation = null;
+    return;
+  }
+
+  const frames = ATTACK_ASSETS.waterPistolSplash;
+  const frameIndex = Math.min(frames.length - 1, Math.floor(progress * frames.length));
+  const image = frames[frameIndex];
+  if (!image.complete || image.naturalWidth <= 0) return;
+
+  const pulse = Math.sin(progress * Math.PI);
+  const weapon = weaponLayout();
+  const size = canvas.height * (0.27 + frameIndex * 0.105 + pulse * 0.09);
+  const targetX = canvas.width * 0.46;
+  const targetY = canvas.height * 0.43;
+  const travel = 0.12 + progress * 0.5;
+  const centerX = weapon.muzzleX + (targetX - weapon.muzzleX) * travel;
+  const centerY = weapon.muzzleY + (targetY - weapon.muzzleY) * travel;
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - progress * 0.35);
+  ctx.drawImage(image, centerX - size / 2, centerY - size / 2, size, size);
+  ctx.restore();
+}
+
+function drawHeldWeapon() {
+  const image = WEAPON_ASSETS.waterPistol;
+  if (!image.complete || image.naturalWidth <= 0) return;
+
+  const { x, y, size } = weaponLayout();
+  ctx.save();
+  ctx.drawImage(image, x, y, size, size);
+  ctx.restore();
 }
 
 function drawFloorTexture(width, height) {
@@ -513,7 +599,7 @@ function castRay(angle) {
 
 function drawForwardEntity() {
   const ahead = cellsAhead(6);
-  for (let depth = ahead.length - 1; depth >= 0; depth -= 1) {
+  for (let depth = 0; depth < ahead.length; depth += 1) {
     const cell = ahead[depth];
     const monster = monsterAt(game, cell.x, cell.y);
     const item = itemAt(game, cell.x, cell.y);
@@ -544,6 +630,16 @@ function cellsAhead(max) {
 }
 
 function drawMonster(x, y, size, monster) {
+  const image = monster.name === "Crab guard" ? MONSTER_ASSETS.crabGuard : MONSTER_ASSETS.waterPistolEnemy;
+  if (image.complete && image.naturalWidth > 0) {
+    const drawSize = size * 1.5;
+    ctx.save();
+    ctx.drawImage(image, x - drawSize / 2, y - drawSize * 0.62, drawSize, drawSize);
+    drawMonsterHealthBar(x, y, size, monster);
+    ctx.restore();
+    return;
+  }
+
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = "#e76f51";
@@ -555,13 +651,28 @@ function drawMonster(x, y, size, monster) {
   ctx.arc(-size * 0.13, -size * 0.1, size * 0.045, 0, Math.PI * 2);
   ctx.arc(size * 0.13, -size * 0.1, size * 0.045, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+  drawMonsterHealthBar(x, y, size, monster);
+}
+
+function drawMonsterHealthBar(x, y, size, monster) {
+  ctx.save();
   ctx.strokeStyle = "#f7d987";
   ctx.lineWidth = Math.max(2, size * 0.025);
-  ctx.strokeRect(-size * 0.32, size * 0.28, size * 0.64 * (monster.hp / monster.maxHp), 5);
+  ctx.strokeRect(x - size * 0.32, y + size * 0.28, size * 0.64 * (monster.hp / monster.maxHp), 5);
   ctx.restore();
 }
 
 function drawPickup(x, y, size, type) {
+  const image = type === "Pearl cache" ? OBJECT_ASSETS.pearlCache : OBJECT_ASSETS.coconutPotion;
+  if (image.complete && image.naturalWidth > 0) {
+    const drawSize = size * 2.6;
+    ctx.save();
+    ctx.drawImage(image, x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+    ctx.restore();
+    return;
+  }
+
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = type === "Pearl cache" ? "#fff6dc" : "#2a9d8f";
@@ -575,6 +686,15 @@ function drawPickup(x, y, size, type) {
 }
 
 function drawStairs(x, y, size) {
+  const image = ENVIRONMENT_ASSETS.stairs;
+  if (image.complete && image.naturalWidth > 0) {
+    const drawSize = size * 1.8;
+    ctx.save();
+    ctx.drawImage(image, x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+    ctx.restore();
+    return;
+  }
+
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = "#102026";
