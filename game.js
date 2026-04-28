@@ -511,7 +511,7 @@ function drawScene() {
   ctx.fillRect(0, height * 0.5, width, height * 0.5);
   drawFloorTexture(width, height);
 
-  const rays = 180;
+  const rays = Math.min(420, Math.max(240, Math.floor(width / 3)));
   const fov = Math.PI / 3;
   const baseAngle = (game.player.dir - 1) * (Math.PI / 2);
   for (let i = 0; i < rays; i += 1) {
@@ -521,7 +521,7 @@ function drawScene() {
     const wallHeight = Math.min(height, height / (corrected * 0.68));
     const shade = Math.max(0.22, 1 - corrected / 11);
     const x = (i / rays) * width;
-    const sliceWidth = Math.ceil(width / rays) + 1;
+    const sliceWidth = width / rays + 1.35;
     ctx.fillStyle = shadeColor(t.wall, shade);
     ctx.fillRect(x, height / 2 - wallHeight / 2, sliceWidth, wallHeight);
     drawWallTexture(ray, x, height / 2 - wallHeight / 2, sliceWidth, wallHeight, shade);
@@ -529,9 +529,9 @@ function drawScene() {
       ctx.fillStyle = `rgba(16,32,38,${0.18 + (1 - shade) * 0.35})`;
       ctx.fillRect(x, height / 2 - wallHeight / 2, sliceWidth, wallHeight);
     }
-    if (i % 8 === 0) {
-      ctx.fillStyle = `rgba(255,246,220,${0.08 * shade})`;
-      ctx.fillRect(x, height / 2 - wallHeight / 2, 2, wallHeight);
+    if (i % 18 === 0) {
+      ctx.fillStyle = `rgba(255,246,220,${0.025 * shade})`;
+      ctx.fillRect(x, height / 2 - wallHeight / 2, 1.2, wallHeight);
     }
   }
 
@@ -679,9 +679,15 @@ function drawWallTexture(ray, x, y, width, height, shade) {
   if (image.complete && image.naturalWidth > 0) {
     const hitOffset = ray.side === "x" ? ray.hitY : ray.hitX;
     const texturePosition = ((hitOffset % 1) + 1) % 1;
-    const textureX = Math.min(image.naturalWidth - 1, Math.floor(texturePosition * image.naturalWidth));
+    const sourceWidth = Math.min(8, image.naturalWidth);
+    const textureX = Math.min(
+      image.naturalWidth - sourceWidth,
+      Math.max(0, Math.floor(texturePosition * image.naturalWidth - sourceWidth / 2)),
+    );
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.globalAlpha = 0.36 + shade * 0.48;
-    ctx.drawImage(image, textureX, 0, 1, image.naturalHeight, x, y, width, height);
+    ctx.drawImage(image, textureX, 0, sourceWidth, image.naturalHeight, x - 0.35, y, width + 0.7, height);
     ctx.globalAlpha = Math.max(0.08, 0.48 - shade * 0.24);
     ctx.fillStyle = "#102026";
     ctx.fillRect(x, y, width, height);
