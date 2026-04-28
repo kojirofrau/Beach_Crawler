@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Beach Crawler</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="play-area" aria-label="Dungeon">
+        <header class="top-bar">
+          <div>
+            <h1>Beach Crawler</h1>
+            <p id="floorLabel">Floor 1 - Sunken Boardwalk</p>
+          </div>
+          <div class="turn-chip" id="turnChip">Turn 0</div>
+        </header>
+
+        <canvas id="dungeonView" width="960" height="540" aria-label="First-person dungeon view"></canvas>
+
+        <section class="bottom-deck" aria-label="Character and controls">
+          <article class="hero-card">
+            <div class="portrait" aria-hidden="true">
+              <span class="hat"></span>
+              <span class="face"></span>
+              <span class="scarf"></span>
+            </div>
+            <div>
+              <h2>Reef Delver</h2>
+              <p id="statusLine">Ready</p>
+            </div>
+          </article>
+
+          <div class="controls" aria-label="On-screen arrow keys">
+            <button class="arrow blank" disabled aria-hidden="true"></button>
+            <button class="arrow" data-action="forward" aria-label="Move forward">▲</button>
+            <button class="arrow blank" disabled aria-hidden="true"></button>
+            <button class="arrow" data-action="left" aria-label="Turn left">◀</button>
+            <button class="arrow" data-action="back" aria-label="Move backward">▼</button>
+            <button class="arrow" data-action="right" aria-label="Turn right">▶</button>
+          </div>
+
+          <div class="quick-actions">
+            <button id="usePotion">Use Potion</button>
+            <button id="newRun">New Run</button>
+          </div>
+        </section>
+      </section>
+
+      <aside class="sidebar" aria-label="Player status, inventory, and debug telemetry">
+        <section class="panel">
+          <h2>Player Status</h2>
+          <div class="meters">
+            <label>HP <span id="hpText">0/0</span></label>
+            <div class="meter"><span id="hpBar"></span></div>
+            <label>XP <span id="xpText">0/0</span></label>
+            <div class="meter xp"><span id="xpBar"></span></div>
+          </div>
+          <dl class="stats">
+            <div><dt>Level</dt><dd id="levelText">1</dd></div>
+            <div><dt>Attack</dt><dd id="attackText">3</dd></div>
+            <div><dt>Shells</dt><dd id="shellText">0</dd></div>
+            <div><dt>Facing</dt><dd id="facingText">N</dd></div>
+          </dl>
+        </section>
+
+        <section class="panel">
+          <h2>Inventory</h2>
+          <ul id="inventoryList" class="inventory"></ul>
+        </section>
+
+        <section class="panel">
+          <h2>Telemetry</h2>
+          <dl class="telemetry">
+            <div><dt>Seed</dt><dd id="seedText"></dd></div>
+            <div><dt>Position</dt><dd id="positionText"></dd></div>
+            <div><dt>Entities</dt><dd id="entityText"></dd></div>
+            <div><dt>FPS</dt><dd id="fpsText"></dd></div>
+          </dl>
+          <ol id="eventLog" class="event-log"></ol>
+        </section>
+      </aside>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>
