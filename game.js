@@ -104,6 +104,29 @@ const HEART_OVERLAY = {
   deathCount: 190,
 };
 
+const AUDIO_SETTINGS = {
+  musicVolume: 0.18,
+  stingerVolume: 0.28,
+  fadeMs: 650,
+};
+
+const AUDIO_EXTENSIONS = ["mp3", "ogg", "wav", "m4a"];
+
+const AUDIO_CUES = {
+  floorThemes: [
+    "floor_01_sunken_boardwalk_loop",
+    "floor_02_coral_gallery_loop",
+    "floor_03_tide_pool_ruins_loop",
+    "floor_04_shellgate_reef_loop",
+  ],
+  lowHealth: "low health loop",
+  levelStart: "level start",
+  levelComplete: "level complete",
+  floorTransition: "floor transition",
+  defeat: "defeat",
+  potion: "use_potion_01",
+};
+
 const PLAYER_PORTRAIT_ASSETS = {
   smile: loadPlayerPortraitFrames("smile", 6),
   lookRight: loadPlayerPortraitFrames("look_right", 3),
@@ -171,6 +194,11 @@ let currentPortraitSrc = "";
 let levelStartTimer = null;
 let levelCompletionPending = false;
 const debugKeyChord = new Set();
+let audioUnlocked = false;
+let currentMusic = null;
+let currentMusicName = "";
+let lowHealthMusic = null;
+const audioCache = new Map();
 
 function loadImage(src) {
   const image = new Image();
@@ -184,6 +212,114 @@ function loadEnemyFrames(enemy, action) {
 
 function loadPlayerPortraitFrames(action, count) {
   return Array.from({ length: count }, (_, index) => loadImage(`assets/player/portrait/${action}_${String(index + 1).padStart(2, "0")}.png`));
+}
+
+function createAudioCue(name, options = {}) {
+  const cacheKey = `${name}:${options.loop ? "loop" : "once"}`;
+  if (audioCache.has(cacheKey)) return audioCache.get(cacheKey);
+
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.loop = Boolean(options.loop);
+  audio.volume = options.volume ?? AUDIO_SETTINGS.musicVolume;
+  audio.dataset.baseName = name;
+  audio.dataset.sourceIndex = "0";
+  audio.addEventListener("error", () => tryNextAudioSource(audio));
+  setAudioSource(audio, name, 0);
+  audioCache.set(cacheKey, audio);
+  return audio;
+}
+
+function setAudioSource(audio, name, index) {
+  audio.dataset.sourceIndex = String(index);
+  audio.src = `Music/${name}.${AUDIO_EXTENSIONS[index]}`;
+}
+
+function tryNextAudioSource(audio) {
+  const nextIndex = Number(audio.dataset.sourceIndex || 0) + 1;
+  if (nextIndex >= AUDIO_EXTENSIONS.length) return;
+  setAudioSource(audio, audio.dataset.baseName, nextIndex);
+  audio.load();
+  if (audio.dataset.playRequested === "true") {
+    audio.play().catch(() => {});
+  }
+}
+
+function unlockAudio() {
+  audioUnlocked = true;
+  playFloorMusic();
+  updateLowHealthMusic();
+}
+
+function floorMusicCue() {
+  return AUDIO_CUES.floorThemes[(game.floor - 1) % AUDIO_CUES.floorThemes.length];
+}
+
+function playFloorMusic() {
+  if (!audioUnlocked || !game?.player?.alive || levelCompletionPending) return;
+  const cue = floorMusicCue();
+  if (currentMusicName === cue && currentMusic && !currentMusic.paused) return;
+
+  fadeOutAudio(currentMusic);
+  currentMusicName = cue;
+  currentMusic = createAudioCue(cue, { loop: true, volume: AUDIO_SETTINGS.musicVolume });
+  currentMusic.currentTime = 0;
+  currentMusic.volume = AUDIO_SETTINGS.musicVolume;
+  currentMusic.dataset.playRequested = "true";
+  currentMusic.play().catch(() => {});
+}
+
+function playStinger(name, volume = AUDIO_SETTINGS.stingerVolume) {
+  if (!audioUnlocked) return;
+  const audio = createAudioCue(name, { loop: false, volume });
+  audio.pause();
+  audio.currentTime = 0;
+  audio.volume = volume;
+  audio.dataset.playRequested = "true";
+  audio.play().catch(() => {});
+}
+
+function fadeOutAudio(audio) {
+  if (!audio || audio.paused) return;
+  const startVolume = audio.volume;
+  const startedAt = performance.now();
+
+  function step(now) {
+    const progress = Math.min(1, (now - startedAt) / AUDIO_SETTINGS.fadeMs);
+    audio.volume = startVolume * (1 - progress);
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    } else {
+      audio.pause();
+      audio.volume = startVolume;
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+
+function updateLowHealthMusic() {
+  if (!audioUnlocked || !game?.player) return;
+  const healthRatio = game.player.maxHp > 0 ? game.player.hp / game.player.maxHp : 0;
+  const shouldPlay = game.player.alive && healthRatio > 0 && healthRatio < HEART_OVERLAY.lowHealthThreshold && !levelCompletionPending;
+
+  if (shouldPlay) {
+    if (!lowHealthMusic) lowHealthMusic = createAudioCue(AUDIO_CUES.lowHealth, { loop: true, volume: AUDIO_SETTINGS.musicVolume * 0.7 });
+    if (lowHealthMusic.paused) {
+      lowHealthMusic.currentTime = 0;
+      lowHealthMusic.volume = AUDIO_SETTINGS.musicVolume * 0.7;
+      lowHealthMusic.dataset.playRequested = "true";
+      lowHealthMusic.play().catch(() => {});
+    }
+  } else {
+    fadeOutAudio(lowHealthMusic);
+  }
+}
+
+function stopGameplayMusic() {
+  fadeOutAudio(currentMusic);
+  fadeOutAudio(lowHealthMusic);
+  currentMusicName = "";
 }
 
 function createFloorStats() {
@@ -501,6 +637,8 @@ function defeatPlayer() {
   game.player.alive = false;
   game.lastMessage = "You collapse in the tide-warmed sand.";
   logEvent(game, "Run ended.");
+  stopGameplayMusic();
+  playStinger(AUDIO_CUES.defeat);
   showDefeatCard();
 }
 
@@ -543,6 +681,8 @@ function nextFloor(spendTransitionTurn = true) {
   game.player.hp = game.player.maxHp;
   buildFloor(game);
   showLevelStartCard();
+  playStinger(AUDIO_CUES.floorTransition);
+  playFloorMusic();
   if (spendTransitionTurn) {
     spendTurn("Descended to the next beach labyrinth.");
   } else {
@@ -558,6 +698,8 @@ function completeLevel() {
   levelCompletionPending = true;
   game.lastMessage = "Level complete. Press any key to continue.";
   logEvent(game, "Level complete.");
+  stopGameplayMusic();
+  playStinger(AUDIO_CUES.levelComplete);
   showLevelCompleteCard();
   updateUi();
 }
@@ -576,6 +718,7 @@ function usePotion() {
   game.floorStats.potionsUsed += 1;
   game.runStats.potionsUsed += 1;
   startPotionAnimation();
+  playStinger(AUDIO_CUES.potion, 0.22);
   spendTurn("Coconut potion restored 12 HP.");
 }
 
@@ -599,6 +742,7 @@ function logEvent(run, message) {
 function showLevelStartCard() {
   if (levelStartTimer) clearTimeout(levelStartTimer);
   ui.levelStartTitle.textContent = `Floor ${game.floor}: ${theme(game).name}`;
+  playStinger(AUDIO_CUES.levelStart);
   ui.levelStartCard.classList.remove("visible");
   ui.levelStartCard.setAttribute("aria-hidden", "false");
   void ui.levelStartCard.offsetWidth;
@@ -668,6 +812,7 @@ function restartGame() {
   updateUi();
   updatePlayerPortrait(performance.now());
   showLevelStartCard();
+  playFloorMusic();
 }
 
 function dismissDefeat() {
@@ -717,6 +862,7 @@ function updateUi() {
   ui.entityText.textContent = `${activeEnemies} enemies / ${game.items.length} pickups`;
   ui.fpsText.textContent = fps.toString();
   updatePotionSlots();
+  updateLowHealthMusic();
   ui.eventLog.innerHTML = game.events.map((event) => `<li>${event}</li>`).join("");
 }
 
@@ -1427,10 +1573,16 @@ document.querySelectorAll("[data-potion-slot]").forEach((button) => {
 document.querySelector("#newRun").addEventListener("click", restartGame);
 
 document.addEventListener("pointerdown", () => {
+  unlockAudio();
   dismissDefeat();
 });
 
+window.addEventListener("load", unlockAudio);
+window.addEventListener("focus", unlockAudio);
+
 window.addEventListener("keydown", (event) => {
+  unlockAudio();
+
   if (event.key === "Escape") {
     setDebugWindowVisible(false);
     debugKeyChord.clear();
@@ -1478,4 +1630,6 @@ game = createGame();
 updateUi();
 updatePlayerPortrait(performance.now());
 showLevelStartCard();
+unlockAudio();
+setTimeout(unlockAudio, 250);
 requestAnimationFrame(render);

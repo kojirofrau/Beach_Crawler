@@ -54,6 +54,7 @@ Debug information is hidden during normal play.
 - `index.html`: DOM structure for the game canvas, HUD, modals, and hidden debug window.
 - `styles.css`: fixed viewport layout, beach HUD styling, modal styling, and debug window styling.
 - `game.js`: procedural generation, turn logic, rendering, HUD updates, animations, input, floor transitions, debug toggles, and run statistics.
+- `Music/`: runtime soundtrack files used by the browser game. The audio loader checks `.mp3`, `.ogg`, `.wav`, and `.m4a` for each named cue.
 - `assets/attacks/`: water pistol splash animation frames and chroma-key sources.
 - `assets/characters/`: original player character concept/cutout assets.
 - `assets/effects/hearts/`: five transparent heart sprites plus the generated chroma-key source sheet.
