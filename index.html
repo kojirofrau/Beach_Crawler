@@ -9,14 +9,6 @@
   <body>
     <main class="app-shell">
       <section class="play-area" aria-label="Dungeon">
-        <header class="top-bar">
-          <div>
-            <h1>Beach Crawler</h1>
-            <p id="floorLabel">Floor 1 - Sunken Boardwalk</p>
-          </div>
-          <div class="turn-chip" id="turnChip">Turn 0</div>
-        </header>
-
         <canvas id="dungeonView" width="960" height="540" aria-label="First-person dungeon view"></canvas>
 
         <section class="bottom-deck" aria-label="Player HUD">
@@ -48,42 +40,27 @@
           </div>
         </section>
       </section>
-
-      <aside class="sidebar" aria-label="Player status, controls, and debug telemetry">
-        <section class="panel">
-          <h2>Player Status</h2>
-          <dl class="stats">
-            <div><dt>Attack</dt><dd id="attackText">3</dd></div>
-            <div><dt>Shells</dt><dd id="shellText">0</dd></div>
-            <div><dt>Facing</dt><dd id="facingText">N</dd></div>
-          </dl>
-        </section>
-
-        <section class="panel controls-panel">
-          <h2>Controls</h2>
-          <div class="controls" aria-label="On-screen arrow keys">
-            <button class="arrow blank" disabled aria-hidden="true"></button>
-            <button class="arrow" data-action="forward" aria-label="Move forward">▲</button>
-            <button class="arrow blank" disabled aria-hidden="true"></button>
-            <button class="arrow" data-action="left" aria-label="Turn left">◀</button>
-            <button class="arrow" data-action="back" aria-label="Move backward">▼</button>
-            <button class="arrow" data-action="right" aria-label="Turn right">▶</button>
-          </div>
-          <button class="wide-action" id="newRun" type="button">New Run</button>
-        </section>
-
-        <section class="panel">
-          <h2>Telemetry</h2>
-          <dl class="telemetry">
-            <div><dt>Seed</dt><dd id="seedText"></dd></div>
-            <div><dt>Position</dt><dd id="positionText"></dd></div>
-            <div><dt>Entities</dt><dd id="entityText"></dd></div>
-            <div><dt>FPS</dt><dd id="fpsText"></dd></div>
-          </dl>
-          <ol id="eventLog" class="event-log"></ol>
-        </section>
-      </aside>
     </main>
+
+    <section class="debug-window" id="debugWindow" aria-hidden="true">
+      <div class="debug-window__header">
+        <h2>Debug</h2>
+        <span>Esc closes</span>
+      </div>
+      <dl class="telemetry">
+        <div><dt>Floor</dt><dd id="floorLabel">Floor 1 - Sunken Boardwalk</dd></div>
+        <div><dt>Turn</dt><dd id="turnChip">Turn 0</dd></div>
+        <div><dt>Attack</dt><dd id="attackText">3</dd></div>
+        <div><dt>Shells</dt><dd id="shellText">0</dd></div>
+        <div><dt>Facing</dt><dd id="facingText">N</dd></div>
+        <div><dt>Seed</dt><dd id="seedText"></dd></div>
+        <div><dt>Position</dt><dd id="positionText"></dd></div>
+        <div><dt>Entities</dt><dd id="entityText"></dd></div>
+        <div><dt>FPS</dt><dd id="fpsText"></dd></div>
+      </dl>
+      <ol id="eventLog" class="event-log"></ol>
+      <button class="wide-action" id="newRun" type="button">New Run</button>
+    </section>
 
     <div class="level-modal level-start-card" id="levelStartCard" aria-hidden="true">
       <div class="level-modal__eyebrow">Entering</div>

@@ -25,6 +25,7 @@ const ui = {
   defeatSummaryDefeated: document.querySelector("#defeatSummaryDefeated"),
   defeatSummaryPotions: document.querySelector("#defeatSummaryPotions"),
   defeatSummaryShells: document.querySelector("#defeatSummaryShells"),
+  debugWindow: document.querySelector("#debugWindow"),
   seedText: document.querySelector("#seedText"),
   positionText: document.querySelector("#positionText"),
   entityText: document.querySelector("#entityText"),
@@ -169,6 +170,7 @@ let playerPortraitCue = null;
 let currentPortraitSrc = "";
 let levelStartTimer = null;
 let levelCompletionPending = false;
+const debugKeyChord = new Set();
 
 function loadImage(src) {
   const image = new Image();
@@ -672,6 +674,26 @@ function dismissDefeat() {
   if (game.player.alive) return false;
   restartGame();
   return true;
+}
+
+function setDebugWindowVisible(visible) {
+  ui.debugWindow.classList.toggle("visible", visible);
+  ui.debugWindow.setAttribute("aria-hidden", String(!visible));
+}
+
+function isDebugChordKey(key) {
+  return key === "1" || key === "2" || key === "3";
+}
+
+function updateDebugChord(event, pressed) {
+  if (!isDebugChordKey(event.key)) return false;
+  if (pressed) debugKeyChord.add(event.key);
+  else debugKeyChord.delete(event.key);
+  if (debugKeyChord.has("1") && debugKeyChord.has("2") && debugKeyChord.has("3")) {
+    setDebugWindowVisible(true);
+    return true;
+  }
+  return false;
 }
 
 function updateUi() {
@@ -1409,6 +1431,18 @@ document.addEventListener("pointerdown", () => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    setDebugWindowVisible(false);
+    debugKeyChord.clear();
+    event.preventDefault();
+    return;
+  }
+
+  if (updateDebugChord(event, true)) {
+    event.preventDefault();
+    return;
+  }
+
   if (dismissDefeat()) {
     event.preventDefault();
     return;
@@ -1434,6 +1468,10 @@ window.addEventListener("keydown", (event) => {
     act(keyMap[event.key]);
   }
   if (event.key.toLowerCase() === "q") usePotion();
+});
+
+window.addEventListener("keyup", (event) => {
+  updateDebugChord(event, false);
 });
 
 game = createGame();

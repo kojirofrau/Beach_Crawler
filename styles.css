@@ -7,8 +7,6 @@
   --reef: #e76f51;
   --kelp: #2a9d8f;
   --night: #17252f;
-  --panel: #203743;
-  --panel-2: #284852;
   --line: rgba(255, 246, 220, 0.22);
   --text: #fff6dc;
   --muted: #bcd6d4;
@@ -20,7 +18,9 @@
 
 html,
 body {
-  min-height: 100%;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -52,92 +52,45 @@ button:disabled {
 }
 
 .app-shell {
+  width: 100vw;
+  height: 100vh;
+  padding: 8px;
+}
+
+.play-area {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 16px;
-  min-height: 100vh;
-  padding: 16px;
-}
-
-.play-area,
-.sidebar {
+  grid-template-rows: minmax(0, 1fr) 147px;
+  width: 100%;
+  height: 100%;
   min-width: 0;
-}
-
-.top-bar,
-.bottom-deck,
-.panel {
-  border: 1px solid var(--line);
-  background: linear-gradient(135deg, rgba(23, 37, 47, 0.94), rgba(40, 72, 82, 0.9));
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
-}
-
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  min-height: 78px;
-  padding: 12px 16px;
-  border-radius: 8px 8px 0 0;
-}
-
-h1,
-h2,
-p {
-  margin: 0;
-}
-
-h1 {
-  font-size: clamp(1.5rem, 2.6vw, 2.4rem);
-  letter-spacing: 0;
-}
-
-h2 {
-  margin-bottom: 10px;
-  font-size: 1rem;
-}
-
-.top-bar p,
-.telemetry,
-.event-log {
-  color: var(--muted);
-}
-
-.turn-chip {
-  min-width: 92px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(79, 182, 189, 0.18);
-  text-align: center;
-  font-weight: 800;
 }
 
 #dungeonView {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  max-height: calc(100vh - 248px);
-  min-height: 310px;
+  height: 100%;
+  min-height: 0;
   border: 1px solid rgba(255, 246, 220, 0.34);
   background: #102026;
 }
 
 .bottom-deck {
-  min-height: 138px;
-  padding: 8px;
+  min-height: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
   border-radius: 0 0 8px 8px;
   background:
     linear-gradient(180deg, rgba(255, 246, 220, 0.08), transparent 25%),
     linear-gradient(135deg, rgba(20, 66, 76, 0.98), rgba(126, 82, 45, 0.94));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
 }
 
 .hud-panel {
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) 156px minmax(190px, 1fr);
-  align-items: end;
-  gap: 10px;
-  min-height: 122px;
+  grid-template-columns: minmax(190px, 1fr) 150px minmax(260px, 1fr);
+  align-items: center;
+  gap: 8px;
+  height: 100%;
   border: 3px solid #f5d893;
   border-radius: 6px;
   background:
@@ -145,7 +98,7 @@ h2 {
     repeating-linear-gradient(90deg, rgba(255, 246, 220, 0.08) 0 2px, transparent 2px 16px),
     linear-gradient(180deg, #32606a, #17252f 56%, #7a5630);
   box-shadow: inset 0 0 0 2px rgba(16, 32, 38, 0.68);
-  padding: 10px;
+  padding: 4px 8px;
 }
 
 .hud-bars,
@@ -154,15 +107,32 @@ h2 {
   min-width: 0;
 }
 
-.hud-bars {
-  align-self: stretch;
+.hud-bars,
+.potion-rack {
   display: grid;
   align-content: center;
-  gap: 8px;
-  padding: 12px;
+  gap: 5px;
+  height: 118px;
+  padding: 8px 10px;
   border: 2px solid rgba(255, 246, 220, 0.36);
   border-radius: 6px;
   background: rgba(16, 32, 38, 0.58);
+}
+
+.potion-rack {
+  grid-template-columns: minmax(0, auto) minmax(112px, 150px);
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-content: center;
+  column-gap: 12px;
+}
+
+.potion-rack .rack-label {
+  grid-column: 1 / -1;
+}
+
+.potion-rack .hud-action {
+  align-self: stretch;
 }
 
 .hud-bars label {
@@ -170,13 +140,13 @@ h2 {
   justify-content: space-between;
   gap: 12px;
   color: var(--paper);
-  font-size: 0.86rem;
+  font-size: 0.78rem;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .meter {
-  height: 18px;
+  height: 13px;
   border: 2px solid rgba(255, 246, 220, 0.46);
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.36);
@@ -196,19 +166,27 @@ h2 {
 }
 
 .hero-hud {
+  position: relative;
   display: grid;
   justify-items: center;
-  gap: 5px;
+  grid-template-rows: 96px minmax(18px, auto);
+  align-content: center;
+  gap: 4px;
+  height: 128px;
 }
 
 .level-plaque {
-  min-width: 92px;
-  padding: 4px 9px;
+  position: absolute;
+  top: -2px;
+  z-index: 2;
+  min-width: 80px;
+  padding: 2px 8px;
   border: 2px solid #f5d893;
-  border-radius: 5px 5px 0 0;
+  border-radius: 5px;
   background: linear-gradient(180deg, #f9dd92, #c98d58);
   color: #102026;
   text-align: center;
+  font-size: 0.82rem;
   font-weight: 900;
 }
 
@@ -237,43 +215,33 @@ h2 {
 }
 
 #statusLine {
-  width: min(260px, 100%);
-  min-height: 26px;
+  width: min(190px, 100%);
+  min-height: 18px;
   color: var(--paper);
-  font-size: 0.78rem;
+  font-size: 0.66rem;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.08;
   text-align: center;
-}
-
-.potion-rack {
-  align-self: stretch;
-  display: grid;
-  align-content: center;
-  gap: 8px;
-  padding: 10px;
-  border: 2px solid rgba(255, 246, 220, 0.36);
-  border-radius: 6px;
-  background: rgba(16, 32, 38, 0.58);
+  text-shadow: 0 1px 2px #102026;
 }
 
 .rack-label {
   color: var(--paper);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .potion-slots {
   display: grid;
-  grid-template-columns: repeat(3, minmax(46px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, 46px);
+  gap: 7px;
 }
 
 .potion-slot {
   position: relative;
-  aspect-ratio: 1;
-  min-width: 0;
+  width: 46px;
+  height: 46px;
   border: 2px solid #f5d893;
   border-radius: 5px;
   background:
@@ -296,29 +264,60 @@ h2 {
 
 .hud-action,
 .wide-action {
-  min-height: 36px;
+  min-height: 46px;
   border-radius: 6px;
+  font-size: 0.82rem;
 }
 
-.sidebar {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-}
-
-.panel {
+.debug-window {
+  position: fixed;
+  right: 16px;
+  top: 16px;
+  z-index: 30;
+  display: none;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   padding: 14px;
+  border: 1px solid var(--line);
   border-radius: 8px;
+  background: linear-gradient(135deg, rgba(23, 37, 47, 0.97), rgba(40, 72, 82, 0.96));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  overflow: auto;
 }
 
-.stats,
+.debug-window.visible {
+  display: block;
+}
+
+.debug-window__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.debug-window__header h2,
+p {
+  margin: 0;
+}
+
+.debug-window__header h2 {
+  font-size: 1rem;
+}
+
+.debug-window__header span,
+.telemetry,
+.event-log {
+  color: var(--muted);
+}
+
 .telemetry {
   display: grid;
   gap: 8px;
   margin: 0;
 }
 
-.stats div,
 .telemetry div {
   display: flex;
   justify-content: space-between;
@@ -332,33 +331,14 @@ dd {
 
 dd {
   font-weight: 800;
-}
-
-.controls-panel {
-  display: grid;
-  gap: 12px;
-}
-
-.controls {
-  display: grid;
-  grid-template-columns: repeat(3, 54px);
-  grid-template-rows: repeat(2, 46px);
-  gap: 6px;
-  justify-content: center;
-}
-
-.arrow {
-  width: 54px;
-  height: 46px;
-  border-radius: 8px;
-  font-size: 1.1rem;
+  text-align: right;
 }
 
 .event-log {
   display: grid;
   gap: 6px;
   max-height: 214px;
-  margin: 14px 0 0;
+  margin: 14px 0;
   padding-left: 18px;
   overflow: auto;
   font-size: 0.82rem;
@@ -396,12 +376,12 @@ dd {
   animation: levelStartSlide 5s ease-in-out forwards;
 }
 
-.level-complete-card {
+.level-complete-card,
+.defeat-card {
   padding: 24px;
 }
 
 .defeat-card {
-  padding: 24px;
   border-color: #ff9bc1;
   background:
     linear-gradient(180deg, rgba(255, 155, 193, 0.14), transparent 30%),
@@ -463,55 +443,50 @@ dd {
   }
 }
 
-@media (max-width: 980px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  #dungeonView {
-    max-height: none;
-  }
-
-  .hud-panel {
-    grid-template-columns: minmax(0, 1fr) 140px minmax(0, 1fr);
-  }
-
-  .portrait-blank {
-    width: 88px;
-    height: 88px;
-  }
-}
-
 @media (max-width: 620px) {
   .app-shell {
-    padding: 8px;
+    padding: 4px;
   }
 
-  .top-bar {
-    align-items: flex-start;
-    flex-direction: column;
+  .play-area {
+    grid-template-rows: minmax(0, 1fr) 146px;
   }
 
   .hud-panel {
-    grid-template-columns: 1fr;
-    align-items: stretch;
+    grid-template-columns: minmax(94px, 1fr) 106px 156px;
+    gap: 4px;
+    padding: 3px;
   }
 
-  .hero-hud {
-    order: -1;
+  .hud-bars,
+  .potion-rack {
+    height: 122px;
+    padding: 6px;
+  }
+
+  .potion-rack {
+    grid-template-columns: minmax(0, auto) 74px;
+    column-gap: 6px;
+  }
+
+  .hud-bars label,
+  .rack-label {
+    font-size: 0.64rem;
   }
 
   .potion-slots {
-    grid-template-columns: repeat(3, 58px);
+    grid-template-columns: repeat(3, 23px);
+    gap: 3px;
   }
 
-  .controls {
-    grid-template-columns: repeat(3, 64px);
-    grid-template-rows: repeat(2, 52px);
+  .potion-slot {
+    width: 23px;
+    height: 23px;
   }
 
-  .arrow {
-    width: 64px;
-    height: 52px;
+  .hud-action {
+    min-height: 34px;
+    font-size: 0.62rem;
+    line-height: 1.05;
   }
 }
