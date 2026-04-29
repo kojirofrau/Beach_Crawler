@@ -10,10 +10,17 @@ const ui = {
   xpText: document.querySelector("#xpText"),
   xpBar: document.querySelector("#xpBar"),
   levelText: document.querySelector("#levelText"),
+  playerPortrait: document.querySelector("#playerPortrait"),
   attackText: document.querySelector("#attackText"),
   shellText: document.querySelector("#shellText"),
   facingText: document.querySelector("#facingText"),
-  inventoryList: document.querySelector("#inventoryList"),
+  potionSlots: Array.from(document.querySelectorAll("[data-potion-slot]")),
+  levelStartCard: document.querySelector("#levelStartCard"),
+  levelStartTitle: document.querySelector("#levelStartTitle"),
+  levelCompleteCard: document.querySelector("#levelCompleteCard"),
+  summaryDefeated: document.querySelector("#summaryDefeated"),
+  summaryShells: document.querySelector("#summaryShells"),
+  summaryPotions: document.querySelector("#summaryPotions"),
   seedText: document.querySelector("#seedText"),
   positionText: document.querySelector("#positionText"),
   entityText: document.querySelector("#entityText"),
@@ -83,12 +90,74 @@ const WEAPON_ASSETS = {
   waterPistol: loadImage("assets/weapons/water_pistol_first_person.png"),
 };
 
+const MAX_POTIONS = 3;
+
+const PLAYER_PORTRAIT_ASSETS = {
+  smile: loadPlayerPortraitFrames("smile", 6),
+  lookRight: loadPlayerPortraitFrames("look_right", 3),
+  lookLeft: loadPlayerPortraitFrames("look_left", 3),
+  pain: loadPlayerPortraitFrames("pain", 3),
+  wet: loadPlayerPortraitFrames("wet", 6),
+  death: loadPlayerPortraitFrames("death", 3),
+};
+
+const ENEMY_RENDERING = {
+  maxDistance: 6.4,
+  halfCellDepth: 0.42,
+  visibleHeight: 1.34,
+  deathHeight: 0.74,
+  closeRange: 1,
+  normalRange: 2.25,
+  closeScale: 0.45,
+};
+
+const ENEMY_DEATH_DISSOLVE = {
+  poseDuration: 960,
+  dissolveDuration: 2200,
+  columns: 14,
+  rows: 12,
+};
+
+const ENEMY_SPRITE_BOUNDS = {
+  "fighter_attack_01.png": { x: 12, y: 12, width: 160, height: 416 },
+  "fighter_attack_02.png": { x: 12, y: 12, width: 170, height: 420 },
+  "fighter_attack_03.png": { x: 12, y: 12, width: 300, height: 415 },
+  "fighter_death_01.png": { x: 11, y: 11, width: 308, height: 345 },
+  "fighter_death_02.png": { x: 12, y: 11, width: 302, height: 260 },
+  "fighter_death_03.png": { x: 12, y: 12, width: 426, height: 110 },
+  "fighter_standby_01.png": { x: 11, y: 12, width: 203, height: 410 },
+  "fighter_standby_02.png": { x: 12, y: 12, width: 204, height: 413 },
+  "fighter_standby_03.png": { x: 11, y: 10, width: 206, height: 418 },
+  "shooter_attack_01.png": { x: 12, y: 12, width: 249, height: 389 },
+  "shooter_attack_02.png": { x: 12, y: 11, width: 258, height: 390 },
+  "shooter_attack_03.png": { x: 12, y: 12, width: 300, height: 388 },
+  "shooter_death_01.png": { x: 12, y: 12, width: 302, height: 302 },
+  "shooter_death_02.png": { x: 12, y: 12, width: 327, height: 256 },
+  "shooter_death_03.png": { x: 12, y: 11, width: 384, height: 164 },
+  "shooter_standby_01.png": { x: 12, y: 12, width: 181, height: 440 },
+  "shooter_standby_02.png": { x: 12, y: 12, width: 191, height: 440 },
+  "shooter_standby_03.png": { x: 11, y: 12, width: 138, height: 437 },
+  "swordswoman_attack_01.png": { x: 12, y: 12, width: 307, height: 415 },
+  "swordswoman_attack_02.png": { x: 12, y: 12, width: 319, height: 399 },
+  "swordswoman_attack_03.png": { x: 12, y: 12, width: 384, height: 403 },
+  "swordswoman_death_01.png": { x: 12, y: 12, width: 341, height: 316 },
+  "swordswoman_death_02.png": { x: 12, y: 12, width: 358, height: 246 },
+  "swordswoman_death_03.png": { x: 0, y: 12, width: 444, height: 169 },
+  "swordswoman_standby_01.png": { x: 11, y: 12, width: 229, height: 422 },
+  "swordswoman_standby_02.png": { x: 12, y: 11, width: 241, height: 423 },
+  "swordswoman_standby_03.png": { x: 11, y: 12, width: 286, height: 424 },
+};
+
 let game;
 let lastFrame = performance.now();
 let frames = 0;
 let fps = 0;
 let attackAnimation = null;
 let potionAnimation = null;
+let playerPortraitCue = null;
+let currentPortraitSrc = "";
+let levelStartTimer = null;
+let levelCompletionPending = false;
 
 function loadImage(src) {
   const image = new Image();
@@ -98,6 +167,18 @@ function loadImage(src) {
 
 function loadEnemyFrames(enemy, action) {
   return [1, 2, 3].map((frame) => loadImage(`assets/enemies/${enemy}/${enemy}_${action}_${String(frame).padStart(2, "0")}.png`));
+}
+
+function loadPlayerPortraitFrames(action, count) {
+  return Array.from({ length: count }, (_, index) => loadImage(`assets/player/portrait/${action}_${String(index + 1).padStart(2, "0")}.png`));
+}
+
+function createFloorStats() {
+  return {
+    defeatedGirls: 0,
+    shellsCollected: 0,
+    potionsUsed: 0,
+  };
 }
 
 function mulberry32(seed) {
@@ -134,6 +215,7 @@ function createGame(seed = Date.now() % 1000000) {
     monsters: [],
     items: [],
     stairs: { x: 1, y: 1 },
+    floorStats: createFloorStats(),
     events: [],
     lastMessage: "The sun is high. The maze is waiting.",
   };
@@ -143,6 +225,7 @@ function createGame(seed = Date.now() % 1000000) {
 }
 
 function buildFloor(run) {
+  run.floorStats = createFloorStats();
   const size = 15 + Math.min(8, run.floor * 2);
   const width = size % 2 === 0 ? size + 1 : size;
   const height = width;
@@ -253,6 +336,8 @@ function startDirection(run) {
 }
 
 function act(action) {
+  if (levelCompletionPending) return;
+
   if (!game.player.alive) {
     logEvent(game, "Start a new run to continue.");
     updateUi();
@@ -260,6 +345,7 @@ function act(action) {
   }
 
   if (action === "left" || action === "right") {
+    startPlayerPortraitCue(action === "left" ? "lookLeft" : "lookRight");
     game.player.dir = (game.player.dir + (action === "left" ? 3 : 1)) % 4;
     spendTurn(`Turned ${action}.`);
     return;
@@ -284,7 +370,7 @@ function act(action) {
   game.player.y = ny;
   const item = itemAt(game, nx, ny);
   if (item) pickUp(item);
-  if (game.stairs.x === nx && game.stairs.y === ny) nextFloor();
+  if (game.stairs.x === nx && game.stairs.y === ny) completeLevel();
   else spendTurn("Moved through the sandy passage.");
 }
 
@@ -306,6 +392,8 @@ function attackMonster(monster) {
     monster.hp = 0;
     monster.state = "dying";
     monster.diedAt = performance.now();
+    monster.deathSeed = hashString(`${monster.id}-${game.turn}-${monster.x}-${monster.y}`);
+    game.floorStats.defeatedGirls += 1;
     gainXp(monster.xp);
     const message = `Defeated ${monster.name} for ${monster.xp} XP.`;
     game.lastMessage = message;
@@ -313,7 +401,7 @@ function attackMonster(monster) {
   } else {
     const counter = monster.attack + Math.floor(game.random() * 3);
     startEnemyAttack(monster);
-    game.player.hp = Math.max(0, game.player.hp - counter);
+    damagePlayer(counter);
     const message = `Hit ${monster.name} for ${hit}. ${monster.name} strikes back for ${counter}.`;
     game.lastMessage = message;
     logEvent(game, message);
@@ -334,7 +422,7 @@ function resolveRangedEnemyAttacks() {
 
   const damage = shooter.attack + Math.floor(game.random() * 3);
   startEnemyAttack(shooter);
-  game.player.hp = Math.max(0, game.player.hp - damage);
+  damagePlayer(damage);
   logEvent(game, `${shooter.name} sprays you from range for ${damage}.`);
   if (game.player.hp <= 0) {
     game.player.alive = false;
@@ -377,6 +465,22 @@ function startPotionAnimation() {
   };
 }
 
+function startPlayerPortraitCue(action) {
+  playerPortraitCue = {
+    action,
+    startedAt: performance.now(),
+  };
+}
+
+function damagePlayer(amount) {
+  game.player.hp = Math.max(0, game.player.hp - amount);
+  startPlayerPortraitCue(game.player.hp <= 0 ? "death" : "pain");
+}
+
+function potionCount() {
+  return game.player.inventory.filter((item) => item === "Coconut potion").length;
+}
+
 function gainXp(amount) {
   game.player.xp += amount;
   while (game.player.xp >= game.player.nextXp) {
@@ -391,25 +495,48 @@ function gainXp(amount) {
 }
 
 function pickUp(item) {
-  game.items = game.items.filter((entry) => entry.id !== item.id);
   if (item.type === "Pearl cache") {
+    game.items = game.items.filter((entry) => entry.id !== item.id);
     const shells = 3 + Math.floor(game.random() * 6);
     game.player.shells += shells;
+    game.floorStats.shellsCollected += shells;
     logEvent(game, `Collected ${shells} shells.`);
-  } else {
+  } else if (potionCount() < MAX_POTIONS) {
+    game.items = game.items.filter((entry) => entry.id !== item.id);
     game.player.inventory.push(item.type);
     logEvent(game, `Picked up ${item.type}.`);
+  } else {
+    logEvent(game, "Potion rack is full.");
   }
 }
 
-function nextFloor() {
+function nextFloor(spendTransitionTurn = true) {
   game.floor += 1;
-  game.player.hp = Math.min(game.player.maxHp, game.player.hp + 7);
+  game.player.hp = game.player.maxHp;
   buildFloor(game);
-  spendTurn("Descended to the next beach labyrinth.");
+  showLevelStartCard();
+  if (spendTransitionTurn) {
+    spendTurn("Descended to the next beach labyrinth.");
+  } else {
+    game.lastMessage = "Descended to the next beach labyrinth.";
+    logEvent(game, game.lastMessage);
+    updateUi();
+  }
+}
+
+function completeLevel() {
+  if (levelCompletionPending) return;
+  game.turn += 1;
+  levelCompletionPending = true;
+  game.lastMessage = "Level complete. Press any key to continue.";
+  logEvent(game, "Level complete.");
+  showLevelCompleteCard();
+  updateUi();
 }
 
 function usePotion() {
+  if (levelCompletionPending) return;
+
   const index = game.player.inventory.indexOf("Coconut potion");
   if (index === -1 || !game.player.alive) {
     logEvent(game, "No potion ready.");
@@ -418,6 +545,7 @@ function usePotion() {
   }
   game.player.inventory.splice(index, 1);
   game.player.hp = Math.min(game.player.maxHp, game.player.hp + 12);
+  game.floorStats.potionsUsed += 1;
   startPotionAnimation();
   spendTurn("Coconut potion restored 12 HP.");
 }
@@ -437,6 +565,47 @@ function itemAt(run, x, y) {
 function logEvent(run, message) {
   run.events.unshift(`[${run.turn}] ${message}`);
   run.events = run.events.slice(0, 24);
+}
+
+function showLevelStartCard() {
+  if (levelStartTimer) clearTimeout(levelStartTimer);
+  ui.levelStartTitle.textContent = `Floor ${game.floor}: ${theme(game).name}`;
+  ui.levelStartCard.classList.remove("visible");
+  ui.levelStartCard.setAttribute("aria-hidden", "false");
+  void ui.levelStartCard.offsetWidth;
+  ui.levelStartCard.classList.add("visible");
+  levelStartTimer = setTimeout(() => {
+    ui.levelStartCard.classList.remove("visible");
+    ui.levelStartCard.setAttribute("aria-hidden", "true");
+    levelStartTimer = null;
+  }, 5000);
+}
+
+function showLevelCompleteCard() {
+  if (levelStartTimer) {
+    clearTimeout(levelStartTimer);
+    levelStartTimer = null;
+  }
+  ui.levelStartCard.classList.remove("visible");
+  ui.levelStartCard.setAttribute("aria-hidden", "true");
+  ui.summaryDefeated.textContent = game.floorStats.defeatedGirls;
+  ui.summaryShells.textContent = game.floorStats.shellsCollected;
+  ui.summaryPotions.textContent = game.floorStats.potionsUsed;
+  ui.levelCompleteCard.classList.add("visible");
+  ui.levelCompleteCard.setAttribute("aria-hidden", "false");
+}
+
+function hideLevelCompleteCard() {
+  ui.levelCompleteCard.classList.remove("visible");
+  ui.levelCompleteCard.setAttribute("aria-hidden", "true");
+}
+
+function dismissLevelCompletion() {
+  if (!levelCompletionPending) return false;
+  levelCompletionPending = false;
+  hideLevelCompleteCard();
+  nextFloor(false);
+  return true;
 }
 
 function updateUi() {
@@ -459,10 +628,51 @@ function updateUi() {
   const activeEnemies = game.monsters.filter((monster) => monster.state !== "dying").length;
   ui.entityText.textContent = `${activeEnemies} enemies / ${game.items.length} pickups`;
   ui.fpsText.textContent = fps.toString();
-  ui.inventoryList.innerHTML = player.inventory.length
-    ? player.inventory.map((item) => `<li>${item}</li>`).join("")
-    : "<li>Empty</li>";
+  updatePotionSlots();
   ui.eventLog.innerHTML = game.events.map((event) => `<li>${event}</li>`).join("");
+}
+
+function updatePotionSlots() {
+  const count = potionCount();
+  ui.potionSlots.forEach((slot, index) => {
+    const filled = index < count;
+    slot.classList.toggle("filled", filled);
+    slot.disabled = !filled || !game.player.alive;
+    slot.setAttribute("aria-label", filled ? `Use potion ${index + 1}` : `Empty potion slot ${index + 1}`);
+  });
+}
+
+function updatePlayerPortrait(now) {
+  const frame = playerPortraitFrame(now);
+  if (!frame || frame.src === currentPortraitSrc) return;
+  currentPortraitSrc = frame.src;
+  ui.playerPortrait.src = frame.src;
+}
+
+function playerPortraitFrame(now) {
+  if (!game.player.alive) {
+    return cuePortraitFrame("death", now, true);
+  }
+
+  if (playerPortraitCue) {
+    const frame = cuePortraitFrame(playerPortraitCue.action, now, playerPortraitCue.action === "death");
+    if (frame) return frame;
+    playerPortraitCue = null;
+  }
+
+  const lowHealth = game.player.hp / game.player.maxHp <= 0.35;
+  const action = lowHealth ? "wet" : "smile";
+  const frames = PLAYER_PORTRAIT_ASSETS[action];
+  return frames[Math.floor(now / 220) % frames.length];
+}
+
+function cuePortraitFrame(action, now, holdLastFrame = false) {
+  const frames = PLAYER_PORTRAIT_ASSETS[action];
+  if (!frames) return null;
+  const elapsed = now - (playerPortraitCue?.startedAt ?? now);
+  const frameIndex = Math.floor(elapsed / 160);
+  if (frameIndex >= frames.length) return holdLastFrame ? frames[frames.length - 1] : null;
+  return frames[frameIndex];
 }
 
 function render(now) {
@@ -471,6 +681,7 @@ function render(now) {
   resizeCanvas();
   drawScene(now);
   drawMinimap();
+  updatePlayerPortrait(now);
   frames += 1;
   if (now - lastFrame > 500) {
     fps = Math.round((frames * 1000) / (now - lastFrame));
@@ -548,7 +759,8 @@ function updateEnemyAnimationStates(now) {
 }
 
 function cleanupDyingEnemies(now) {
-  game.monsters = game.monsters.filter((monster) => monster.state !== "dying" || now - monster.diedAt < 2600);
+  const totalDeathDuration = ENEMY_DEATH_DISSOLVE.poseDuration + ENEMY_DEATH_DISSOLVE.dissolveDuration;
+  game.monsters = game.monsters.filter((monster) => monster.state !== "dying" || now - monster.diedAt < totalDeathDuration);
 }
 
 function weaponLayout() {
@@ -760,19 +972,32 @@ function projectEntity(cell, baseAngle, fov) {
   const cy = cell.y + 0.5;
   const dx = cx - px;
   const dy = cy - py;
+  const facingX = Math.cos(baseAngle);
+  const facingY = Math.sin(baseAngle);
+  const rightX = -facingY;
+  const rightY = facingX;
+  const forwardDistance = dx * facingX + dy * facingY;
+  const lateralDistance = dx * rightX + dy * rightY;
   const distance = Math.hypot(dx, dy);
-  if (distance < 0.1 || distance > 6.4) return null;
+  if (forwardDistance <= 0.08 || distance > ENEMY_RENDERING.maxDistance) return null;
+
+  const halfViewWidth = Math.tan(fov / 2);
+  const screenRatio = lateralDistance / (forwardDistance * halfViewWidth);
+  if (Math.abs(screenRatio) > 1.1) return null;
 
   const angle = Math.atan2(dy, dx);
-  const relativeAngle = normalizeAngle(angle - baseAngle);
-  if (Math.abs(relativeAngle) > fov * 0.58) return null;
-
   const ray = castRay(angle);
   if (ray.distance < distance - 0.18) return null;
 
-  const forwardDistance = Math.max(0.45, distance * Math.cos(relativeAngle));
-  const screenRatio = Math.tan(relativeAngle) / Math.tan(fov / 2);
-  const size = Math.max(canvas.height * 0.13, canvas.height * 0.5 / forwardDistance);
+  const scaleDistance = Math.max(0.55, forwardDistance - (cell.monster ? ENEMY_RENDERING.halfCellDepth : 0));
+  const baseSize = Math.min(canvas.height * 1.24, Math.max(canvas.height * 0.08, canvas.height * 0.52 / scaleDistance));
+  const closeProgress = cell.monster
+    ? Math.min(
+        1,
+        Math.max(0, (forwardDistance - ENEMY_RENDERING.closeRange) / (ENEMY_RENDERING.normalRange - ENEMY_RENDERING.closeRange)),
+      )
+    : 1;
+  const size = baseSize * (ENEMY_RENDERING.closeScale + (1 - ENEMY_RENDERING.closeScale) * closeProgress);
   const depth = Math.min((forwardDistance - 1) / 5, 1);
   const groundNear = canvas.height * 0.88;
   const groundFar = canvas.height * 0.54;
@@ -786,22 +1011,19 @@ function projectEntity(cell, baseAngle, fov) {
   };
 }
 
-function normalizeAngle(angle) {
-  return Math.atan2(Math.sin(angle), Math.cos(angle));
-}
-
 function drawMonster(x, y, size, monster, now) {
   const { action, frameIndex } = enemyAnimationFrame(monster, now);
   const image = ENEMY_ASSETS[monster.type]?.[action]?.[frameIndex];
   if (image?.complete && image.naturalWidth > 0) {
-    drawEnemySprite(x, y, size, image, action);
+    if (monster.state === "dying") drawEnemyDisintegration(x, y, size, image, monster, now);
+    else drawEnemySprite(x, y, size, image, action);
     if (monster.state !== "dying") drawMonsterHealthBar(x, y, size, monster);
   }
 }
 
 function enemyAnimationFrame(monster, now) {
   if (monster.state === "dying") {
-    const frameIndex = Math.min(2, Math.floor((now - monster.diedAt) / 320));
+    const frameIndex = Math.min(2, Math.floor((now - monster.diedAt) / (ENEMY_DEATH_DISSOLVE.poseDuration / 3)));
     return { action: "death", frameIndex };
   }
   if (monster.state === "attack") {
@@ -812,16 +1034,121 @@ function enemyAnimationFrame(monster, now) {
 }
 
 function drawEnemySprite(x, y, size, image, action) {
-  const scale =
-    action === "death"
-      ? Math.min((size * 0.62) / image.naturalHeight, (size * 1.42) / image.naturalWidth)
-      : (size * 1.32) / image.naturalHeight;
-  const drawWidth = image.naturalWidth * scale;
-  const drawHeight = image.naturalHeight * scale;
-  const top = y - drawHeight;
+  const layout = enemySpriteLayout(x, y, size, image, action);
   ctx.save();
-  ctx.drawImage(image, x - drawWidth / 2, top, drawWidth, drawHeight);
+  ctx.drawImage(
+    image,
+    layout.bounds.x,
+    layout.bounds.y,
+    layout.bounds.width,
+    layout.bounds.height,
+    layout.left,
+    layout.top,
+    layout.width,
+    layout.height,
+  );
   ctx.restore();
+}
+
+function enemySpriteLayout(x, y, size, image, action) {
+  const bounds = spriteAlphaBounds(image);
+  const targetHeight = size * (action === "death" ? ENEMY_RENDERING.deathHeight : ENEMY_RENDERING.visibleHeight);
+  const maxWidth = size * (action === "death" ? 1.7 : 1.4);
+  const scale = Math.min(targetHeight / bounds.height, maxWidth / bounds.width);
+  const drawWidth = bounds.width * scale;
+  const drawHeight = bounds.height * scale;
+  return {
+    bounds,
+    scale,
+    width: drawWidth,
+    height: drawHeight,
+    left: x - drawWidth / 2,
+    top: y - drawHeight,
+  };
+}
+
+function drawEnemyDisintegration(x, y, size, image, monster, now) {
+  const elapsed = now - monster.diedAt;
+  const dissolveElapsed = elapsed - ENEMY_DEATH_DISSOLVE.poseDuration;
+  const layout = enemySpriteLayout(x, y, size, image, "death");
+  if (dissolveElapsed <= 0) {
+    drawEnemySprite(x, y, size, image, "death");
+    return;
+  }
+
+  const progress = Math.min(1, Math.max(0, dissolveElapsed / ENEMY_DEATH_DISSOLVE.dissolveDuration));
+  const { bounds, scale } = layout;
+  const cols = ENEMY_DEATH_DISSOLVE.columns;
+  const rows = ENEMY_DEATH_DISSOLVE.rows;
+  const seed = monster.deathSeed || hashString(monster.id || `${monster.x}-${monster.y}`);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const particleIndex = row * cols + col;
+      const sourceLeft = bounds.x + Math.floor((col / cols) * bounds.width);
+      const sourceRight = bounds.x + Math.floor(((col + 1) / cols) * bounds.width);
+      const sourceTop = bounds.y + Math.floor((row / rows) * bounds.height);
+      const sourceBottom = bounds.y + Math.floor(((row + 1) / rows) * bounds.height);
+      const sourceWidth = Math.max(1, sourceRight - sourceLeft);
+      const sourceHeight = Math.max(1, sourceBottom - sourceTop);
+      const destLeft = layout.left + (sourceLeft - bounds.x) * scale;
+      const destTop = layout.top + (sourceTop - bounds.y) * scale;
+      const destWidth = sourceWidth * scale + 0.6;
+      const destHeight = sourceHeight * scale + 0.6;
+      const releaseAt = 0.08 + seededNoise(seed, particleIndex, 0) * 0.42 + (row / rows) * 0.22;
+      const local = Math.max(0, (progress - releaseAt) / Math.max(0.01, 1 - releaseAt));
+
+      if (local <= 0) {
+        ctx.globalAlpha = Math.max(0, 1 - progress * 0.55);
+        ctx.drawImage(image, sourceLeft, sourceTop, sourceWidth, sourceHeight, destLeft, destTop, destWidth, destHeight);
+        continue;
+      }
+
+      const eased = 1 - Math.pow(1 - Math.min(1, local), 2);
+      const drift = (seededNoise(seed, particleIndex, 1) - 0.5) * size * 0.9 * eased;
+      const lift = (0.18 + seededNoise(seed, particleIndex, 2) * 0.85) * size * eased;
+      const scatter = Math.sin((elapsed * 0.006 + particleIndex) * 1.7) * size * 0.025 * eased;
+      const shrink = 1 - eased * 0.42;
+      const particleWidth = destWidth * shrink;
+      const particleHeight = destHeight * shrink;
+      const particleX = destLeft + drift + scatter + (destWidth - particleWidth) / 2;
+      const particleY = destTop - lift + (seededNoise(seed, particleIndex, 3) - 0.5) * size * 0.18 * eased + (destHeight - particleHeight) / 2;
+
+      ctx.globalAlpha = Math.max(0, Math.pow(1 - local, 1.45));
+      ctx.drawImage(image, sourceLeft, sourceTop, sourceWidth, sourceHeight, particleX, particleY, particleWidth, particleHeight);
+
+      if (particleIndex % 3 === 0) {
+        ctx.globalAlpha *= 0.58;
+        ctx.fillStyle = seededNoise(seed, particleIndex, 4) > 0.45 ? "#fff6dc" : "#49b7c4";
+        const sparkSize = Math.max(1.2, size * (0.012 + seededNoise(seed, particleIndex, 5) * 0.018));
+        ctx.fillRect(particleX + particleWidth / 2, particleY + particleHeight / 2, sparkSize, sparkSize);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function seededNoise(seed, index, salt) {
+  let value = seed ^ Math.imul(index + 1, 374761393) ^ Math.imul(salt + 1, 668265263);
+  value = Math.imul(value ^ (value >>> 13), 1274126177);
+  return ((value ^ (value >>> 16)) >>> 0) / 4294967295;
+}
+
+function spriteAlphaBounds(image) {
+  const filename = image.src.slice(image.src.lastIndexOf("/") + 1);
+  return ENEMY_SPRITE_BOUNDS[filename] || { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight };
 }
 
 function drawMonsterHealthBar(x, y, size, monster) {
@@ -935,12 +1262,26 @@ document.querySelectorAll("[data-action]").forEach((button) => {
 });
 
 document.querySelector("#usePotion").addEventListener("click", usePotion);
+document.querySelectorAll("[data-potion-slot]").forEach((button) => {
+  button.addEventListener("click", usePotion);
+});
 document.querySelector("#newRun").addEventListener("click", () => {
   game = createGame();
+  levelCompletionPending = false;
+  hideLevelCompleteCard();
+  playerPortraitCue = null;
+  currentPortraitSrc = "";
   updateUi();
+  updatePlayerPortrait(performance.now());
+  showLevelStartCard();
 });
 
 window.addEventListener("keydown", (event) => {
+  if (dismissLevelCompletion()) {
+    event.preventDefault();
+    return;
+  }
+
   const keyMap = {
     ArrowUp: "forward",
     ArrowDown: "back",
@@ -960,4 +1301,6 @@ window.addEventListener("keydown", (event) => {
 
 game = createGame();
 updateUi();
+updatePlayerPortrait(performance.now());
+showLevelStartCard();
 requestAnimationFrame(render);

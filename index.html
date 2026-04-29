@@ -19,19 +19,48 @@
 
         <canvas id="dungeonView" width="960" height="540" aria-label="First-person dungeon view"></canvas>
 
-        <section class="bottom-deck" aria-label="Character and controls">
-          <article class="hero-card">
-            <div class="portrait" aria-hidden="true">
-              <span class="hat"></span>
-              <span class="face"></span>
-              <span class="scarf"></span>
+        <section class="bottom-deck" aria-label="Player HUD">
+          <div class="hud-panel">
+            <div class="hud-bars" aria-label="Health and experience">
+              <label>HP <span id="hpText">0/0</span></label>
+              <div class="meter hp"><span id="hpBar"></span></div>
+              <label>XP <span id="xpText">0/0</span></label>
+              <div class="meter xp"><span id="xpBar"></span></div>
             </div>
-            <div>
-              <h2>Reef Delver</h2>
+
+            <div class="hero-hud" aria-label="Hero portrait">
+              <div class="level-plaque">LVL <span id="levelText">1</span></div>
+              <div class="portrait-blank" aria-label="Hero portrait">
+                <img id="playerPortrait" alt="" />
+              </div>
               <p id="statusLine">Ready</p>
             </div>
-          </article>
 
+            <div class="potion-rack" aria-label="Potion supply">
+              <span class="rack-label">Potions</span>
+              <div class="potion-slots" id="potionSlots">
+                <button class="potion-slot" type="button" data-potion-slot="0" aria-label="Potion slot 1"></button>
+                <button class="potion-slot" type="button" data-potion-slot="1" aria-label="Potion slot 2"></button>
+                <button class="potion-slot" type="button" data-potion-slot="2" aria-label="Potion slot 3"></button>
+              </div>
+              <button class="hud-action" id="usePotion" type="button">Use Potion</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <aside class="sidebar" aria-label="Player status, controls, and debug telemetry">
+        <section class="panel">
+          <h2>Player Status</h2>
+          <dl class="stats">
+            <div><dt>Attack</dt><dd id="attackText">3</dd></div>
+            <div><dt>Shells</dt><dd id="shellText">0</dd></div>
+            <div><dt>Facing</dt><dd id="facingText">N</dd></div>
+          </dl>
+        </section>
+
+        <section class="panel controls-panel">
+          <h2>Controls</h2>
           <div class="controls" aria-label="On-screen arrow keys">
             <button class="arrow blank" disabled aria-hidden="true"></button>
             <button class="arrow" data-action="forward" aria-label="Move forward">▲</button>
@@ -40,34 +69,7 @@
             <button class="arrow" data-action="back" aria-label="Move backward">▼</button>
             <button class="arrow" data-action="right" aria-label="Turn right">▶</button>
           </div>
-
-          <div class="quick-actions">
-            <button id="usePotion">Use Potion</button>
-            <button id="newRun">New Run</button>
-          </div>
-        </section>
-      </section>
-
-      <aside class="sidebar" aria-label="Player status, inventory, and debug telemetry">
-        <section class="panel">
-          <h2>Player Status</h2>
-          <div class="meters">
-            <label>HP <span id="hpText">0/0</span></label>
-            <div class="meter"><span id="hpBar"></span></div>
-            <label>XP <span id="xpText">0/0</span></label>
-            <div class="meter xp"><span id="xpBar"></span></div>
-          </div>
-          <dl class="stats">
-            <div><dt>Level</dt><dd id="levelText">1</dd></div>
-            <div><dt>Attack</dt><dd id="attackText">3</dd></div>
-            <div><dt>Shells</dt><dd id="shellText">0</dd></div>
-            <div><dt>Facing</dt><dd id="facingText">N</dd></div>
-          </dl>
-        </section>
-
-        <section class="panel">
-          <h2>Inventory</h2>
-          <ul id="inventoryList" class="inventory"></ul>
+          <button class="wide-action" id="newRun" type="button">New Run</button>
         </section>
 
         <section class="panel">
@@ -82,6 +84,22 @@
         </section>
       </aside>
     </main>
+
+    <div class="level-modal level-start-card" id="levelStartCard" aria-hidden="true">
+      <div class="level-modal__eyebrow">Entering</div>
+      <div class="level-modal__title" id="levelStartTitle">Sunken Boardwalk</div>
+    </div>
+
+    <div class="level-modal level-complete-card" id="levelCompleteCard" aria-hidden="true" role="dialog" aria-live="polite">
+      <div class="level-modal__eyebrow">Level Complete</div>
+      <div class="level-modal__title">Well done, you've completed the level!</div>
+      <dl class="level-summary">
+        <div><dt>Girls defeated</dt><dd id="summaryDefeated">0</dd></div>
+        <div><dt>Precious shells collected</dt><dd id="summaryShells">0</dd></div>
+        <div><dt>Potions used</dt><dd id="summaryPotions">0</dd></div>
+      </dl>
+      <p class="level-modal__hint">Press any key to continue</p>
+    </div>
 
     <script src="game.js"></script>
   </body>
