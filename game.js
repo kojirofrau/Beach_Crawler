@@ -21,6 +21,10 @@ const ui = {
   summaryDefeated: document.querySelector("#summaryDefeated"),
   summaryShells: document.querySelector("#summaryShells"),
   summaryPotions: document.querySelector("#summaryPotions"),
+  defeatCard: document.querySelector("#defeatCard"),
+  defeatSummaryDefeated: document.querySelector("#defeatSummaryDefeated"),
+  defeatSummaryPotions: document.querySelector("#defeatSummaryPotions"),
+  defeatSummaryShells: document.querySelector("#defeatSummaryShells"),
   seedText: document.querySelector("#seedText"),
   positionText: document.querySelector("#positionText"),
   entityText: document.querySelector("#entityText"),
@@ -84,6 +88,7 @@ const EFFECT_ASSETS = {
     loadImage("assets/effects/potion/potion_bubbles_02.png"),
     loadImage("assets/effects/potion/potion_bubbles_03.png"),
   ],
+  hearts: [1, 2, 3, 4, 5].map((index) => loadImage(`assets/effects/hearts/heart_${String(index).padStart(2, "0")}.png`)),
 };
 
 const WEAPON_ASSETS = {
@@ -91,6 +96,12 @@ const WEAPON_ASSETS = {
 };
 
 const MAX_POTIONS = 3;
+
+const HEART_OVERLAY = {
+  lowHealthThreshold: 0.5,
+  edgeCount: 62,
+  deathCount: 190,
+};
 
 const PLAYER_PORTRAIT_ASSETS = {
   smile: loadPlayerPortraitFrames("smile", 6),
@@ -181,6 +192,14 @@ function createFloorStats() {
   };
 }
 
+function createRunStats() {
+  return {
+    defeatedGirls: 0,
+    shellsCollected: 0,
+    potionsUsed: 0,
+  };
+}
+
 function mulberry32(seed) {
   return function random() {
     seed |= 0;
@@ -216,6 +235,7 @@ function createGame(seed = Date.now() % 1000000) {
     items: [],
     stairs: { x: 1, y: 1 },
     floorStats: createFloorStats(),
+    runStats: createRunStats(),
     events: [],
     lastMessage: "The sun is high. The maze is waiting.",
   };
@@ -394,6 +414,7 @@ function attackMonster(monster) {
     monster.diedAt = performance.now();
     monster.deathSeed = hashString(`${monster.id}-${game.turn}-${monster.x}-${monster.y}`);
     game.floorStats.defeatedGirls += 1;
+    game.runStats.defeatedGirls += 1;
     gainXp(monster.xp);
     const message = `Defeated ${monster.name} for ${monster.xp} XP.`;
     game.lastMessage = message;
@@ -406,9 +427,7 @@ function attackMonster(monster) {
     game.lastMessage = message;
     logEvent(game, message);
     if (game.player.hp <= 0) {
-      game.player.alive = false;
-      game.lastMessage = "You collapse in the tide-warmed sand.";
-      logEvent(game, "Run ended.");
+      defeatPlayer();
     }
   }
   updateUi();
@@ -425,9 +444,7 @@ function resolveRangedEnemyAttacks() {
   damagePlayer(damage);
   logEvent(game, `${shooter.name} sprays you from range for ${damage}.`);
   if (game.player.hp <= 0) {
-    game.player.alive = false;
-    game.lastMessage = "You collapse in the tide-warmed sand.";
-    logEvent(game, "Run ended.");
+    defeatPlayer();
   }
 }
 
@@ -477,6 +494,14 @@ function damagePlayer(amount) {
   startPlayerPortraitCue(game.player.hp <= 0 ? "death" : "pain");
 }
 
+function defeatPlayer() {
+  if (!game.player.alive) return;
+  game.player.alive = false;
+  game.lastMessage = "You collapse in the tide-warmed sand.";
+  logEvent(game, "Run ended.");
+  showDefeatCard();
+}
+
 function potionCount() {
   return game.player.inventory.filter((item) => item === "Coconut potion").length;
 }
@@ -500,6 +525,7 @@ function pickUp(item) {
     const shells = 3 + Math.floor(game.random() * 6);
     game.player.shells += shells;
     game.floorStats.shellsCollected += shells;
+    game.runStats.shellsCollected += shells;
     logEvent(game, `Collected ${shells} shells.`);
   } else if (potionCount() < MAX_POTIONS) {
     game.items = game.items.filter((entry) => entry.id !== item.id);
@@ -546,6 +572,7 @@ function usePotion() {
   game.player.inventory.splice(index, 1);
   game.player.hp = Math.min(game.player.maxHp, game.player.hp + 12);
   game.floorStats.potionsUsed += 1;
+  game.runStats.potionsUsed += 1;
   startPotionAnimation();
   spendTurn("Coconut potion restored 12 HP.");
 }
@@ -600,11 +627,50 @@ function hideLevelCompleteCard() {
   ui.levelCompleteCard.setAttribute("aria-hidden", "true");
 }
 
+function showDefeatCard() {
+  if (levelStartTimer) {
+    clearTimeout(levelStartTimer);
+    levelStartTimer = null;
+  }
+  levelCompletionPending = false;
+  ui.levelStartCard.classList.remove("visible");
+  ui.levelStartCard.setAttribute("aria-hidden", "true");
+  hideLevelCompleteCard();
+  ui.defeatSummaryDefeated.textContent = game.runStats.defeatedGirls;
+  ui.defeatSummaryPotions.textContent = game.runStats.potionsUsed;
+  ui.defeatSummaryShells.textContent = game.runStats.shellsCollected;
+  ui.defeatCard.classList.add("visible");
+  ui.defeatCard.setAttribute("aria-hidden", "false");
+}
+
+function hideDefeatCard() {
+  ui.defeatCard.classList.remove("visible");
+  ui.defeatCard.setAttribute("aria-hidden", "true");
+}
+
 function dismissLevelCompletion() {
   if (!levelCompletionPending) return false;
   levelCompletionPending = false;
   hideLevelCompleteCard();
   nextFloor(false);
+  return true;
+}
+
+function restartGame() {
+  game = createGame();
+  levelCompletionPending = false;
+  hideLevelCompleteCard();
+  hideDefeatCard();
+  playerPortraitCue = null;
+  currentPortraitSrc = "";
+  updateUi();
+  updatePlayerPortrait(performance.now());
+  showLevelStartCard();
+}
+
+function dismissDefeat() {
+  if (game.player.alive) return false;
+  restartGame();
   return true;
 }
 
@@ -748,6 +814,7 @@ function drawScene(now) {
   drawHeldWeapon();
   drawPotionAnimation();
   drawCrosshair();
+  drawHeartOverlay(now);
 }
 
 function updateEnemyAnimationStates(now) {
@@ -1223,6 +1290,76 @@ function drawCrosshair() {
   ctx.stroke();
 }
 
+function drawHeartOverlay(now) {
+  if (!game || !game.player) return;
+  const healthRatio = game.player.maxHp > 0 ? game.player.hp / game.player.maxHp : 0;
+  if (game.player.alive && healthRatio >= HEART_OVERLAY.lowHealthThreshold) return;
+
+  const danger = game.player.alive
+    ? Math.min(1, (HEART_OVERLAY.lowHealthThreshold - healthRatio) / HEART_OVERLAY.lowHealthThreshold)
+    : 1;
+  const count = Math.round(game.player.alive ? 12 + danger * HEART_OVERLAY.edgeCount : HEART_OVERLAY.deathCount);
+  const edgeBand = Math.min(canvas.width, canvas.height) * (0.12 + danger * 0.22);
+
+  ctx.save();
+  for (let i = 0; i < count; i += 1) {
+    const heart = EFFECT_ASSETS.hearts[i % EFFECT_ASSETS.hearts.length];
+    if (!heart.complete || heart.naturalWidth <= 0) continue;
+
+    const placement = game.player.alive ? edgeHeartPlacement(i, edgeBand) : fullScreenHeartPlacement(i);
+    const pulse = Math.sin(now * 0.004 + i * 1.7) * 0.12;
+    const size = Math.max(12, canvas.height * placement.size * (1 + pulse));
+    const alpha = game.player.alive ? 0.28 + danger * 0.5 + placement.alpha * 0.16 : 0.58 + placement.alpha * 0.34;
+
+    ctx.globalAlpha = Math.min(0.94, alpha);
+    ctx.translate(placement.x, placement.y);
+    ctx.rotate(placement.rotation + Math.sin(now * 0.002 + i) * 0.1);
+    ctx.drawImage(heart, -size / 2, -size / 2, size, size);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  ctx.restore();
+}
+
+function edgeHeartPlacement(index, edgeBand) {
+  const side = index % 4;
+  const a = seededNoise(9127, index, 0);
+  const b = seededNoise(9127, index, 1);
+  const inset = b * edgeBand;
+  const width = canvas.width;
+  const height = canvas.height;
+  let x = a * width;
+  let y = inset;
+
+  if (side === 1) {
+    x = width - inset;
+    y = a * height;
+  } else if (side === 2) {
+    x = a * width;
+    y = height - inset;
+  } else if (side === 3) {
+    x = inset;
+    y = a * height;
+  }
+
+  return {
+    x,
+    y,
+    size: 0.032 + seededNoise(9127, index, 2) * 0.032,
+    rotation: (seededNoise(9127, index, 3) - 0.5) * 0.85,
+    alpha: seededNoise(9127, index, 4),
+  };
+}
+
+function fullScreenHeartPlacement(index) {
+  return {
+    x: seededNoise(3821, index, 0) * canvas.width,
+    y: seededNoise(3821, index, 1) * canvas.height,
+    size: 0.034 + seededNoise(3821, index, 2) * 0.044,
+    rotation: (seededNoise(3821, index, 3) - 0.5) * 1.1,
+    alpha: seededNoise(3821, index, 4),
+  };
+}
+
 function drawMinimap() {
   const scale = Math.max(4, Math.min(7, Math.floor(canvas.width / 170)));
   const pad = 14;
@@ -1265,18 +1402,18 @@ document.querySelector("#usePotion").addEventListener("click", usePotion);
 document.querySelectorAll("[data-potion-slot]").forEach((button) => {
   button.addEventListener("click", usePotion);
 });
-document.querySelector("#newRun").addEventListener("click", () => {
-  game = createGame();
-  levelCompletionPending = false;
-  hideLevelCompleteCard();
-  playerPortraitCue = null;
-  currentPortraitSrc = "";
-  updateUi();
-  updatePlayerPortrait(performance.now());
-  showLevelStartCard();
+document.querySelector("#newRun").addEventListener("click", restartGame);
+
+document.addEventListener("pointerdown", () => {
+  dismissDefeat();
 });
 
 window.addEventListener("keydown", (event) => {
+  if (dismissDefeat()) {
+    event.preventDefault();
+    return;
+  }
+
   if (dismissLevelCompletion()) {
     event.preventDefault();
     return;

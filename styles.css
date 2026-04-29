@@ -400,6 +400,14 @@ dd {
   padding: 24px;
 }
 
+.defeat-card {
+  padding: 24px;
+  border-color: #ff9bc1;
+  background:
+    linear-gradient(180deg, rgba(255, 155, 193, 0.14), transparent 30%),
+    linear-gradient(135deg, rgba(69, 22, 48, 0.98), rgba(126, 82, 45, 0.97));
+}
+
 .level-modal__eyebrow {
   color: #94d2bd;
   font-size: 0.82rem;
