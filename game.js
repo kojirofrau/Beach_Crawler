@@ -1128,11 +1128,12 @@ function drawAnimatedSky(now, width, height) {
 
   drawSkyFrame(frames[currentIndex], width, skyHeight, drift, 1);
   drawSkyFrame(frames[nextIndex], width, skyHeight, drift, blend);
-  const haze = ctx.createLinearGradient(0, skyHeight * 0.72, 0, skyHeight);
-  haze.addColorStop(0, "rgba(247,217,135,0)");
-  haze.addColorStop(1, "rgba(247,217,135,0.32)");
-  ctx.fillStyle = haze;
-  ctx.fillRect(0, skyHeight * 0.72, width, skyHeight * 0.28);
+  const zenithShade = ctx.createLinearGradient(0, 0, 0, skyHeight);
+  zenithShade.addColorStop(0, "rgba(0,64,160,0.18)");
+  zenithShade.addColorStop(0.55, "rgba(0,120,210,0)");
+  zenithShade.addColorStop(1, "rgba(38,160,226,0.1)");
+  ctx.fillStyle = zenithShade;
+  ctx.fillRect(0, 0, width, skyHeight);
 }
 
 function drawSkyFrame(image, width, height, drift, alpha) {
