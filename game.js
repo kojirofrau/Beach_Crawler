@@ -31,6 +31,24 @@ const ui = {
   entityText: document.querySelector("#entityText"),
   fpsText: document.querySelector("#fpsText"),
   eventLog: document.querySelector("#eventLog"),
+  audioToggle: document.querySelector("#audioToggle"),
+  openMenu: document.querySelector("#openMenu"),
+  closeMenu: document.querySelector("#closeMenu"),
+  gameMenu: document.querySelector("#gameMenu"),
+  menuNewRun: document.querySelector("#menuNewRun"),
+  continueRun: document.querySelector("#continueRun"),
+  musicVolume: document.querySelector("#musicVolume"),
+  showMinimap: document.querySelector("#showMinimap"),
+  statsRunsStarted: document.querySelector("#statsRunsStarted"),
+  statsRunsEnded: document.querySelector("#statsRunsEnded"),
+  statsBestFloor: document.querySelector("#statsBestFloor"),
+  statsCurrentFloor: document.querySelector("#statsCurrentFloor"),
+  statsDefeated: document.querySelector("#statsDefeated"),
+  statsShells: document.querySelector("#statsShells"),
+  statsPotions: document.querySelector("#statsPotions"),
+  statsTurns: document.querySelector("#statsTurns"),
+  defeatRestart: document.querySelector("#defeatRestart"),
+  defeatMenu: document.querySelector("#defeatMenu"),
 };
 
 const DIRS = [
@@ -51,6 +69,7 @@ const ENVIRONMENT_ASSETS = {
   floor: loadImage("assets/environment/sand_floor_tile_80s_anime.png"),
   wall: loadImage("assets/environment/coral_wall_tile_80s_anime.png"),
   stairs: loadImage("assets/environment/downward_stairs_80s_anime.png"),
+  sky: Array.from({ length: 6 }, (_, index) => loadImage(`assets/environment/sky_clear_clouds_${String(index + 1).padStart(2, "0")}.png`)),
 };
 
 const OBJECT_ASSETS = {
@@ -133,6 +152,9 @@ const PLAYER_PORTRAIT_ASSETS = {
   lookLeft: loadPlayerPortraitFrames("look_left", 3),
   pain: loadPlayerPortraitFrames("pain", 3),
   wet: loadPlayerPortraitFrames("wet", 6),
+  wetLookRight: loadPlayerPortraitFrames("wet_look_right", 3),
+  wetLookLeft: loadPlayerPortraitFrames("wet_look_left", 3),
+  wetPain: loadPlayerPortraitFrames("wet_pain", 3),
   death: loadPlayerPortraitFrames("death", 3),
 };
 
@@ -199,6 +221,21 @@ let currentMusic = null;
 let currentMusicName = "";
 let lowHealthMusic = null;
 const audioCache = new Map();
+const uiState = {
+  menuOpen: true,
+  soundEnabled: true,
+  musicVolume: AUDIO_SETTINGS.musicVolume,
+  showMinimap: true,
+};
+const sessionStats = {
+  runsStarted: 0,
+  runsEnded: 0,
+  bestFloor: 1,
+  defeatedGirls: 0,
+  shellsCollected: 0,
+  potionsUsed: 0,
+  turnsTaken: 0,
+};
 
 function loadImage(src) {
   const image = new Image();
@@ -256,21 +293,21 @@ function floorMusicCue() {
 }
 
 function playFloorMusic() {
-  if (!audioUnlocked || !game?.player?.alive || levelCompletionPending) return;
+  if (!audioUnlocked || !uiState.soundEnabled || uiState.menuOpen || !game?.player?.alive || levelCompletionPending) return;
   const cue = floorMusicCue();
   if (currentMusicName === cue && currentMusic && !currentMusic.paused) return;
 
   fadeOutAudio(currentMusic);
   currentMusicName = cue;
-  currentMusic = createAudioCue(cue, { loop: true, volume: AUDIO_SETTINGS.musicVolume });
+  currentMusic = createAudioCue(cue, { loop: true, volume: uiState.musicVolume });
   currentMusic.currentTime = 0;
-  currentMusic.volume = AUDIO_SETTINGS.musicVolume;
+  currentMusic.volume = uiState.musicVolume;
   currentMusic.dataset.playRequested = "true";
   currentMusic.play().catch(() => {});
 }
 
 function playStinger(name, volume = AUDIO_SETTINGS.stingerVolume) {
-  if (!audioUnlocked) return;
+  if (!audioUnlocked || !uiState.soundEnabled) return;
   const audio = createAudioCue(name, { loop: false, volume });
   audio.pause();
   audio.currentTime = 0;
@@ -299,17 +336,22 @@ function fadeOutAudio(audio) {
 }
 
 function updateLowHealthMusic() {
-  if (!audioUnlocked || !game?.player) return;
+  if (!audioUnlocked || !game?.player || !uiState.soundEnabled || uiState.menuOpen) {
+    fadeOutAudio(lowHealthMusic);
+    return;
+  }
   const healthRatio = game.player.maxHp > 0 ? game.player.hp / game.player.maxHp : 0;
   const shouldPlay = game.player.alive && healthRatio > 0 && healthRatio < HEART_OVERLAY.lowHealthThreshold && !levelCompletionPending;
 
   if (shouldPlay) {
-    if (!lowHealthMusic) lowHealthMusic = createAudioCue(AUDIO_CUES.lowHealth, { loop: true, volume: AUDIO_SETTINGS.musicVolume * 0.7 });
+    if (!lowHealthMusic) lowHealthMusic = createAudioCue(AUDIO_CUES.lowHealth, { loop: true, volume: uiState.musicVolume * 0.7 });
     if (lowHealthMusic.paused) {
       lowHealthMusic.currentTime = 0;
-      lowHealthMusic.volume = AUDIO_SETTINGS.musicVolume * 0.7;
+      lowHealthMusic.volume = uiState.musicVolume * 0.7;
       lowHealthMusic.dataset.playRequested = "true";
       lowHealthMusic.play().catch(() => {});
+    } else {
+      lowHealthMusic.volume = uiState.musicVolume * 0.7;
     }
   } else {
     fadeOutAudio(lowHealthMusic);
@@ -320,6 +362,20 @@ function stopGameplayMusic() {
   fadeOutAudio(currentMusic);
   fadeOutAudio(lowHealthMusic);
   currentMusicName = "";
+}
+
+function applyAudioSettings() {
+  if (currentMusic) currentMusic.volume = uiState.musicVolume;
+  if (lowHealthMusic) lowHealthMusic.volume = uiState.musicVolume * 0.7;
+  ui.audioToggle.classList.toggle("is-muted", !uiState.soundEnabled);
+  ui.audioToggle.setAttribute("aria-pressed", String(uiState.soundEnabled));
+  ui.audioToggle.setAttribute("aria-label", uiState.soundEnabled ? "Sound on" : "Sound muted");
+  if (uiState.soundEnabled) {
+    playFloorMusic();
+    updateLowHealthMusic();
+  } else {
+    stopGameplayMusic();
+  }
 }
 
 function createFloorStats() {
@@ -336,6 +392,34 @@ function createRunStats() {
     shellsCollected: 0,
     potionsUsed: 0,
   };
+}
+
+function recordRunStarted() {
+  sessionStats.runsStarted += 1;
+  updateSessionStatsDisplay();
+}
+
+function recordTurn() {
+  game.turn += 1;
+  sessionStats.turnsTaken += 1;
+}
+
+function updateBestFloor() {
+  sessionStats.bestFloor = Math.max(sessionStats.bestFloor, game?.floor || 1);
+}
+
+function updateSessionStatsDisplay() {
+  if (!ui.statsRunsStarted) return;
+  const canContinue = Boolean(game?.player?.alive);
+  ui.statsRunsStarted.textContent = sessionStats.runsStarted;
+  ui.statsRunsEnded.textContent = sessionStats.runsEnded;
+  ui.statsBestFloor.textContent = sessionStats.bestFloor;
+  ui.statsCurrentFloor.textContent = game?.floor || 1;
+  ui.statsDefeated.textContent = sessionStats.defeatedGirls;
+  ui.statsShells.textContent = sessionStats.shellsCollected;
+  ui.statsPotions.textContent = sessionStats.potionsUsed;
+  ui.statsTurns.textContent = sessionStats.turnsTaken;
+  ui.continueRun.disabled = !canContinue;
 }
 
 function mulberry32(seed) {
@@ -494,6 +578,7 @@ function startDirection(run) {
 }
 
 function act(action) {
+  if (uiState.menuOpen) return;
   if (levelCompletionPending) return;
 
   if (!game.player.alive) {
@@ -503,7 +588,9 @@ function act(action) {
   }
 
   if (action === "left" || action === "right") {
-    startPlayerPortraitCue(action === "left" ? "lookLeft" : "lookRight");
+    const injured = isPlayerWetInjured();
+    const cue = action === "left" ? (injured ? "wetLookLeft" : "lookLeft") : injured ? "wetLookRight" : "lookRight";
+    startPlayerPortraitCue(cue);
     game.player.dir = (game.player.dir + (action === "left" ? 3 : 1)) % 4;
     spendTurn(`Turned ${action}.`);
     return;
@@ -533,7 +620,7 @@ function act(action) {
 }
 
 function spendTurn(message) {
-  game.turn += 1;
+  recordTurn();
   game.lastMessage = message;
   logEvent(game, message);
   resolveRangedEnemyAttacks();
@@ -544,7 +631,7 @@ function attackMonster(monster) {
   if (monster.state === "dying") return;
   const hit = game.player.attack + Math.floor(game.random() * 4);
   monster.hp -= hit;
-  game.turn += 1;
+  recordTurn();
   startWaterPistolAttack();
   if (monster.hp <= 0) {
     monster.hp = 0;
@@ -553,6 +640,7 @@ function attackMonster(monster) {
     monster.deathSeed = hashString(`${monster.id}-${game.turn}-${monster.x}-${monster.y}`);
     game.floorStats.defeatedGirls += 1;
     game.runStats.defeatedGirls += 1;
+    sessionStats.defeatedGirls += 1;
     gainXp(monster.xp);
     const message = `Defeated ${monster.name} for ${monster.xp} XP.`;
     game.lastMessage = message;
@@ -629,17 +717,19 @@ function startPlayerPortraitCue(action) {
 
 function damagePlayer(amount) {
   game.player.hp = Math.max(0, game.player.hp - amount);
-  startPlayerPortraitCue(game.player.hp <= 0 ? "death" : "pain");
+  startPlayerPortraitCue(game.player.hp <= 0 ? "death" : isPlayerWetInjured() ? "wetPain" : "pain");
 }
 
 function defeatPlayer() {
   if (!game.player.alive) return;
   game.player.alive = false;
+  sessionStats.runsEnded += 1;
   game.lastMessage = "You collapse in the tide-warmed sand.";
   logEvent(game, "Run ended.");
   stopGameplayMusic();
   playStinger(AUDIO_CUES.defeat);
   showDefeatCard();
+  updateSessionStatsDisplay();
 }
 
 function potionCount() {
@@ -666,6 +756,7 @@ function pickUp(item) {
     game.player.shells += shells;
     game.floorStats.shellsCollected += shells;
     game.runStats.shellsCollected += shells;
+    sessionStats.shellsCollected += shells;
     logEvent(game, `Collected ${shells} shells.`);
   } else if (potionCount() < MAX_POTIONS) {
     game.items = game.items.filter((entry) => entry.id !== item.id);
@@ -678,6 +769,7 @@ function pickUp(item) {
 
 function nextFloor(spendTransitionTurn = true) {
   game.floor += 1;
+  updateBestFloor();
   game.player.hp = game.player.maxHp;
   buildFloor(game);
   showLevelStartCard();
@@ -694,7 +786,7 @@ function nextFloor(spendTransitionTurn = true) {
 
 function completeLevel() {
   if (levelCompletionPending) return;
-  game.turn += 1;
+  recordTurn();
   levelCompletionPending = true;
   game.lastMessage = "Level complete. Press any key to continue.";
   logEvent(game, "Level complete.");
@@ -717,6 +809,7 @@ function usePotion() {
   game.player.hp = Math.min(game.player.maxHp, game.player.hp + 12);
   game.floorStats.potionsUsed += 1;
   game.runStats.potionsUsed += 1;
+  sessionStats.potionsUsed += 1;
   startPotionAnimation();
   playStinger(AUDIO_CUES.potion, 0.22);
   spendTurn("Coconut potion restored 12 HP.");
@@ -802,8 +895,10 @@ function dismissLevelCompletion() {
   return true;
 }
 
-function restartGame() {
+function restartGame(options = {}) {
+  const { countRun = true } = options;
   game = createGame();
+  if (countRun) recordRunStarted();
   levelCompletionPending = false;
   hideLevelCompleteCard();
   hideDefeatCard();
@@ -813,6 +908,31 @@ function restartGame() {
   updatePlayerPortrait(performance.now());
   showLevelStartCard();
   playFloorMusic();
+}
+
+function setMenuVisible(visible) {
+  uiState.menuOpen = visible;
+  ui.gameMenu.classList.toggle("visible", visible);
+  ui.gameMenu.setAttribute("aria-hidden", String(!visible));
+  if (visible) {
+    stopGameplayMusic();
+    updateSessionStatsDisplay();
+  } else {
+    unlockAudio();
+    playFloorMusic();
+  }
+}
+
+function startRunFromMenu() {
+  restartGame();
+  setMenuVisible(false);
+}
+
+function returnToMenu() {
+  hideDefeatCard();
+  hideLevelCompleteCard();
+  levelCompletionPending = false;
+  setMenuVisible(true);
 }
 
 function dismissDefeat() {
@@ -864,6 +984,7 @@ function updateUi() {
   updatePotionSlots();
   updateLowHealthMusic();
   ui.eventLog.innerHTML = game.events.map((event) => `<li>${event}</li>`).join("");
+  updateSessionStatsDisplay();
 }
 
 function updatePotionSlots() {
@@ -894,10 +1015,13 @@ function playerPortraitFrame(now) {
     playerPortraitCue = null;
   }
 
-  const lowHealth = game.player.hp / game.player.maxHp <= 0.35;
-  const action = lowHealth ? "wet" : "smile";
+  const action = isPlayerWetInjured() ? "wet" : "smile";
   const frames = PLAYER_PORTRAIT_ASSETS[action];
   return frames[Math.floor(now / 220) % frames.length];
+}
+
+function isPlayerWetInjured() {
+  return game.player.hp / game.player.maxHp <= 0.35;
 }
 
 function cuePortraitFrame(action, now, holdLastFrame = false) {
@@ -941,11 +1065,7 @@ function drawScene(now) {
   const t = theme(game);
   const width = canvas.width;
   const height = canvas.height;
-  const sky = ctx.createLinearGradient(0, 0, 0, height * 0.5);
-  sky.addColorStop(0, "#73d2de");
-  sky.addColorStop(1, "#f7d987");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, width, height * 0.5);
+  drawAnimatedSky(now, width, height);
   const floor = ctx.createLinearGradient(0, height * 0.5, 0, height);
   floor.addColorStop(0, t.floor);
   floor.addColorStop(1, "#7a5630");
@@ -983,6 +1103,50 @@ function drawScene(now) {
   drawPotionAnimation();
   drawCrosshair();
   drawHeartOverlay(now);
+}
+
+function drawAnimatedSky(now, width, height) {
+  const skyHeight = height * 0.5;
+  const frames = ENVIRONMENT_ASSETS.sky;
+  const loadedFrames = frames.filter((image) => image.complete && image.naturalWidth > 0);
+
+  if (loadedFrames.length < 2) {
+    const fallback = ctx.createLinearGradient(0, 0, 0, skyHeight);
+    fallback.addColorStop(0, "#73d2de");
+    fallback.addColorStop(1, "#f7d987");
+    ctx.fillStyle = fallback;
+    ctx.fillRect(0, 0, width, skyHeight);
+    return;
+  }
+
+  const frameDuration = 620;
+  const frameProgress = (now / frameDuration) % frames.length;
+  const currentIndex = Math.floor(frameProgress);
+  const nextIndex = (currentIndex + 1) % frames.length;
+  const blend = frameProgress - currentIndex;
+  const drift = ((now * 0.006) % width) / 2;
+
+  drawSkyFrame(frames[currentIndex], width, skyHeight, drift, 1);
+  drawSkyFrame(frames[nextIndex], width, skyHeight, drift, blend);
+  const haze = ctx.createLinearGradient(0, skyHeight * 0.72, 0, skyHeight);
+  haze.addColorStop(0, "rgba(247,217,135,0)");
+  haze.addColorStop(1, "rgba(247,217,135,0.32)");
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, skyHeight * 0.72, width, skyHeight * 0.28);
+}
+
+function drawSkyFrame(image, width, height, drift, alpha) {
+  if (!image?.complete || image.naturalWidth <= 0) return;
+  const drawWidth = Math.max(width, height * (image.naturalWidth / image.naturalHeight));
+  const drawHeight = height;
+  const offset = -((drift % drawWidth) + drawWidth) % drawWidth;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (let x = offset - drawWidth; x < width + drawWidth; x += drawWidth) {
+    ctx.drawImage(image, x, 0, drawWidth, drawHeight);
+  }
+  ctx.restore();
 }
 
 function updateEnemyAnimationStates(now) {
@@ -1529,7 +1693,8 @@ function fullScreenHeartPlacement(index) {
 }
 
 function drawMinimap() {
-  const scale = Math.max(4, Math.min(7, Math.floor(canvas.width / 170)));
+  if (!uiState.showMinimap) return;
+  const scale = Math.max(6, Math.min(10, Math.floor((canvas.width / 170) * 1.4)));
   const pad = 14;
   ctx.save();
   ctx.globalAlpha = 0.86;
@@ -1571,10 +1736,26 @@ document.querySelectorAll("[data-potion-slot]").forEach((button) => {
   button.addEventListener("click", usePotion);
 });
 document.querySelector("#newRun").addEventListener("click", restartGame);
+ui.menuNewRun.addEventListener("click", startRunFromMenu);
+ui.continueRun.addEventListener("click", () => setMenuVisible(false));
+ui.openMenu.addEventListener("click", () => setMenuVisible(true));
+ui.closeMenu.addEventListener("click", () => setMenuVisible(false));
+ui.defeatRestart.addEventListener("click", restartGame);
+ui.defeatMenu.addEventListener("click", returnToMenu);
+ui.audioToggle.addEventListener("click", () => {
+  uiState.soundEnabled = !uiState.soundEnabled;
+  applyAudioSettings();
+});
+ui.musicVolume.addEventListener("input", () => {
+  uiState.musicVolume = Number(ui.musicVolume.value) / 100;
+  applyAudioSettings();
+});
+ui.showMinimap.addEventListener("change", () => {
+  uiState.showMinimap = ui.showMinimap.checked;
+});
 
 document.addEventListener("pointerdown", () => {
   unlockAudio();
-  dismissDefeat();
 });
 
 window.addEventListener("load", unlockAudio);
@@ -1584,11 +1765,19 @@ window.addEventListener("keydown", (event) => {
   unlockAudio();
 
   if (event.key === "Escape") {
+    if (uiState.menuOpen) {
+      setMenuVisible(false);
+      event.preventDefault();
+      return;
+    }
+    setMenuVisible(true);
     setDebugWindowVisible(false);
     debugKeyChord.clear();
     event.preventDefault();
     return;
   }
+
+  if (uiState.menuOpen) return;
 
   if (updateDebugChord(event, true)) {
     event.preventDefault();
@@ -1630,6 +1819,8 @@ game = createGame();
 updateUi();
 updatePlayerPortrait(performance.now());
 showLevelStartCard();
+applyAudioSettings();
+setMenuVisible(true);
 unlockAudio();
 setTimeout(unlockAudio, 250);
 requestAnimationFrame(render);

@@ -51,6 +51,10 @@ button:disabled {
   pointer-events: none;
 }
 
+input {
+  font: inherit;
+}
+
 .app-shell {
   width: 100vw;
   height: 100vh;
@@ -72,6 +76,55 @@ button:disabled {
   min-height: 0;
   border: 1px solid rgba(255, 246, 220, 0.34);
   background: #102026;
+}
+
+.corner-controls {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 50;
+  display: flex;
+  gap: 8px;
+}
+
+.icon-button,
+.menu-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+.icon-button svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-button.is-muted svg path:nth-child(n + 2) {
+  display: none;
+}
+
+.icon-button.is-muted::after {
+  content: "";
+  position: absolute;
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: #102026;
+  transform: rotate(-38deg);
+}
+
+.menu-button {
+  padding: 0 14px;
+  text-transform: uppercase;
 }
 
 .bottom-deck {
@@ -285,6 +338,131 @@ button:disabled {
   overflow: auto;
 }
 
+.menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(16, 32, 38, 0.5), rgba(16, 32, 38, 0.78)),
+    radial-gradient(circle at 30% 18%, rgba(79, 182, 189, 0.24), transparent 34%);
+}
+
+.menu-overlay:not(.visible) {
+  display: none;
+}
+
+.menu-panel {
+  width: min(860px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  padding: 18px;
+  border: 3px solid #f5d893;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 246, 220, 0.1), transparent 26%),
+    linear-gradient(135deg, rgba(20, 66, 76, 0.98), rgba(126, 82, 45, 0.97));
+  box-shadow:
+    inset 0 0 0 2px rgba(16, 32, 38, 0.72),
+    0 22px 70px rgba(0, 0, 0, 0.48);
+  overflow: auto;
+}
+
+.menu-header,
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.menu-kicker {
+  color: #94d2bd;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.menu-header h1,
+.menu-section h2 {
+  margin: 0;
+  color: var(--paper);
+}
+
+.menu-header h1 {
+  font-size: 1.55rem;
+  line-height: 1.1;
+}
+
+.close-button {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(260px, 1.3fr) minmax(230px, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.menu-section {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 2px solid rgba(255, 246, 220, 0.32);
+  border-radius: 6px;
+  background: rgba(16, 32, 38, 0.5);
+}
+
+.menu-section h2 {
+  font-size: 0.92rem;
+  text-transform: uppercase;
+}
+
+.ghost-action {
+  background: rgba(16, 32, 38, 0.62);
+  color: var(--paper);
+}
+
+.menu-stats {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.menu-stats div,
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 246, 220, 0.25);
+  border-radius: 6px;
+  background: rgba(16, 32, 38, 0.45);
+}
+
+.setting-row {
+  color: var(--paper);
+  font-weight: 900;
+}
+
+.setting-row input[type="range"] {
+  width: min(150px, 44vw);
+  accent-color: #f9dd92;
+}
+
+.checkbox-row input {
+  width: 22px;
+  height: 22px;
+  accent-color: #f9dd92;
+}
+
 .debug-window.visible {
   display: block;
 }
@@ -425,6 +603,14 @@ dd {
   font-weight: 900;
 }
 
+.modal-actions {
+  margin-top: 18px;
+}
+
+.modal-actions .wide-action {
+  flex: 1;
+}
+
 @keyframes levelStartSlide {
   0% {
     opacity: 0;
@@ -488,5 +674,24 @@ dd {
     min-height: 34px;
     font-size: 0.62rem;
     line-height: 1.05;
+  }
+
+  .corner-controls {
+    top: 10px;
+    right: 10px;
+  }
+
+  .icon-button,
+  .menu-button {
+    min-width: 38px;
+    height: 38px;
+  }
+
+  .menu-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-actions {
+    flex-direction: column;
   }
 }

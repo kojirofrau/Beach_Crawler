@@ -11,6 +11,17 @@
       <section class="play-area" aria-label="Dungeon">
         <canvas id="dungeonView" width="960" height="540" aria-label="First-person dungeon view"></canvas>
 
+        <div class="corner-controls" aria-label="Game controls">
+          <button class="icon-button" id="audioToggle" type="button" aria-label="Sound on" aria-pressed="true">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M3 10v4h4l5 4V6l-5 4H3Z"></path>
+              <path d="M16 9c1.3 1.3 1.3 4.7 0 6"></path>
+              <path d="M19 6c3 3.4 3 8.6 0 12"></path>
+            </svg>
+          </button>
+          <button class="menu-button" id="openMenu" type="button">Menu</button>
+        </div>
+
         <section class="bottom-deck" aria-label="Player HUD">
           <div class="hud-panel">
             <div class="hud-bars" aria-label="Health and experience">
@@ -41,6 +52,52 @@
         </section>
       </section>
     </main>
+
+    <section class="menu-overlay visible" id="gameMenu" aria-hidden="false" role="dialog" aria-modal="true" aria-label="Game menu">
+      <div class="menu-panel">
+        <div class="menu-header">
+          <div>
+            <p class="menu-kicker">Beach Crawler</p>
+            <h1>Run Menu</h1>
+          </div>
+          <button class="icon-button close-button" id="closeMenu" type="button" aria-label="Close menu">X</button>
+        </div>
+
+        <div class="menu-grid">
+          <section class="menu-section" aria-label="Run actions">
+            <h2>Run</h2>
+            <button class="wide-action" id="menuNewRun" type="button">Start New Run</button>
+            <button class="wide-action ghost-action" id="continueRun" type="button">Continue</button>
+          </section>
+
+          <section class="menu-section" aria-label="Session statistics">
+            <h2>Statistics</h2>
+            <dl class="menu-stats">
+              <div><dt>Runs started</dt><dd id="statsRunsStarted">0</dd></div>
+              <div><dt>Runs ended</dt><dd id="statsRunsEnded">0</dd></div>
+              <div><dt>Best floor</dt><dd id="statsBestFloor">1</dd></div>
+              <div><dt>Current floor</dt><dd id="statsCurrentFloor">1</dd></div>
+              <div><dt>Girls defeated</dt><dd id="statsDefeated">0</dd></div>
+              <div><dt>Shells collected</dt><dd id="statsShells">0</dd></div>
+              <div><dt>Potions drunk</dt><dd id="statsPotions">0</dd></div>
+              <div><dt>Turns taken</dt><dd id="statsTurns">0</dd></div>
+            </dl>
+          </section>
+
+          <section class="menu-section" aria-label="Settings">
+            <h2>Settings</h2>
+            <label class="setting-row" for="musicVolume">
+              <span>Music volume</span>
+              <input id="musicVolume" type="range" min="0" max="100" value="18" />
+            </label>
+            <label class="setting-row checkbox-row" for="showMinimap">
+              <span>Show minimap</span>
+              <input id="showMinimap" type="checkbox" checked />
+            </label>
+          </section>
+        </div>
+      </div>
+    </section>
 
     <section class="debug-window" id="debugWindow" aria-hidden="true">
       <div class="debug-window__header">
@@ -86,7 +143,11 @@
         <div><dt>Potions drunk</dt><dd id="defeatSummaryPotions">0</dd></div>
         <div><dt>Precious shells collected</dt><dd id="defeatSummaryShells">0</dd></div>
       </dl>
-      <p class="level-modal__hint">Press any key or button to restart</p>
+      <div class="modal-actions">
+        <button class="wide-action" id="defeatRestart" type="button">New Run</button>
+        <button class="wide-action ghost-action" id="defeatMenu" type="button">Return to Menu</button>
+      </div>
+      <p class="level-modal__hint">Press any key to restart</p>
     </div>
 
     <script src="game.js"></script>
